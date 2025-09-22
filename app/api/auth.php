@@ -12,13 +12,13 @@ if (!$username || !$password) {
 }
 
 try {
-    $stmt = $conn->prepare("SELECT id, username, password, nome, role, sitio FROM usuarios WHERE username = ? LIMIT 1");
+    $stmt = $conn->prepare("SELECT id, username, password, nome, role, sitio FROM usuarios WHERE username = ? AND status = 'ATIVO' LIMIT 1");
     $stmt->bind_param("s", $username);
     $stmt->execute();
     $result = $stmt->get_result();
 
     if ($result->num_rows === 0) {
-        echo json_encode(['success' => false, 'message' => 'Usuário não encontrado.']);
+        echo json_encode(['success' => false, 'message' => 'Usuário não encontrado ou inativo.']);
         exit;
     }
 
@@ -36,7 +36,6 @@ try {
     $stmt_update_token->bind_param("ssi", $token, $expiry_date, $user['id']);
     $stmt_update_token->execute();
 
-    // Resposta JSON corrigida: removido o campo 'codigo'
     echo json_encode([
         'success' => true,
         'token' => $token,

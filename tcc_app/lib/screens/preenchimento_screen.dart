@@ -39,7 +39,7 @@ class _PreenchimentoScreenState extends State<PreenchimentoScreen> {
     _fetchCamposFromLocalDB();
   }
 
-  // A função agora busca os campos do banco de dados LOCAL (SQLite)
+  // Busca os campos do banco de dados LOCAL (SQLite)
   Future<void> _fetchCamposFromLocalDB() async {
     try {
       final campos = await DatabaseService.instance.getCamposDoQuestionarioLocal(widget.idQuestionario);
@@ -100,8 +100,6 @@ class _PreenchimentoScreenState extends State<PreenchimentoScreen> {
       return Center(child: Text('Erro: $_errorMessage'));
     }
     return ListView.builder(
-      // Usamos SingleChildScrollView com Column para evitar problemas de layout
-      // com o teclado aparecendo. Ou podemos usar um ListView.
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
       itemCount: _campos.length,
       itemBuilder: (context, index) {

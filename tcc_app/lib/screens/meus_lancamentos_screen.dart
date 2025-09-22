@@ -53,10 +53,9 @@ class _MeusLancamentosScreenState extends State<MeusLancamentosScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Últimos Lançamentos'), // Título mais apropriado
+        title: const Text('Últimos Lançamentos'),
         centerTitle: true,
       ),
-      // Removemos a barra de navegação 'bottomNavigationBar'
       body: _buildBody(),
     );
   }
@@ -78,7 +77,6 @@ class _MeusLancamentosScreenState extends State<MeusLancamentosScreen> {
         child: Text("Você ainda não possui lançamentos sincronizados."),
       );
     }
-    // A ListView volta a ser simples
     return ListView.builder(
       padding: const EdgeInsets.all(8.0),
       itemCount: _lancamentos.length,
