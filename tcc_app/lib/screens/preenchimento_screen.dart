@@ -221,7 +221,7 @@ class _PreenchimentoScreenState extends State<PreenchimentoScreen> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 20.0),
       child: DropdownButtonFormField<String>(
-        value: _dropdownValues[idCampo],
+        initialValue: _dropdownValues[idCampo],
         decoration: InputDecoration(
           labelText: nomeCampo,
           border: const OutlineInputBorder(),

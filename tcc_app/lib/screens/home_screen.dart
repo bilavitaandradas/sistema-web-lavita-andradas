@@ -58,13 +58,14 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _sincronizarTudo({bool showMessages = true}) async {
     if (mounted) setState(() => _isLoading = true);
 
-    if (showMessages)
+    if (showMessages) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Sincronizando dados...'),
           duration: Duration(seconds: 2),
         ),
       );
+    }
 
     try {
       final token = await AuthService.instance.getToken();
@@ -104,7 +105,7 @@ class _HomeScreenState extends State<HomeScreen> {
       if (mounted && showMessages) {
         ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
             content: Text('Falha na sincronização. Verifique sua conexão.'),
             backgroundColor: Colors.orange,
           ),
