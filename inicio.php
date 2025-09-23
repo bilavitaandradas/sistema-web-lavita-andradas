@@ -1,40 +1,57 @@
 <?php
 session_start();
-
-// Definir o fuso horário para São Paulo
 date_default_timezone_set('America/Sao_Paulo');
+require_once 'php/config.php';
 
-// Verificar se o usuário está logado
+// Redireciona se não estiver logado
 if (!isset($_SESSION['usuario_id'])) {
-    if (isset($_COOKIE['remember_me'])) {
-        require_once 'php/config.php';
-        $remember_token = $_COOKIE['remember_me'];
-        $query = "SELECT id, username, nome, role FROM usuarios WHERE remember_token = ?";
-        $stmt = $conn->prepare($query);
-        $stmt->bind_param('s', $remember_token);
-        $stmt->execute();
-        $result = $stmt->get_result();
+    header('Location: index.php');
+    exit();
+}
 
-        if ($result->num_rows === 1) {
-            $usuario = $result->fetch_assoc();
-            $_SESSION['usuario_id'] = $usuario['id'];
-            $_SESSION['username'] = $usuario['username'];
-            $_SESSION['nome'] = $usuario['nome'];
-            $_SESSION['role'] = $usuario['role'];
-        } else {
-            setcookie('remember_me', '', time() - 3600, "/");
-            header('Location: index.php');
-            exit();
-        }
-    } else {
-        header('Location: index.php');
+// --- LÓGICA PARA PROCESSAR UM NOVO RECADO ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['novo_recado'])) {
+    $mensagem_recado = trim($_POST['mensagem_recado']);
+    if (!empty($mensagem_recado)) {
+        $stmt_recado = $conn->prepare("INSERT INTO recados (mensagem, id_usuario) VALUES (?, ?)");
+        $stmt_recado->bind_param('si', $mensagem_recado, $_SESSION['usuario_id']);
+        $stmt_recado->execute();
+        $stmt_recado->close();
+        header('Location: inicio.php');
         exit();
     }
 }
 
-// Obter a data atual (apenas dia e mês)
-$data_atual = date('m-d');
+// --- NOVA LÓGICA PARA EXCLUIR UM RECADO ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['excluir_recado'])) {
+    $id_recado_para_excluir = (int) $_POST['id_recado'];
+    $id_usuario_logado = (int) $_SESSION['usuario_id'];
+
+    // Pega o ID do autor do recado para verificar a permissão
+    $stmt_check = $conn->prepare("SELECT id_usuario FROM recados WHERE id_recado = ?");
+    $stmt_check->bind_param('i', $id_recado_para_excluir);
+    $stmt_check->execute();
+    $result_check = $stmt_check->get_result();
+    if ($recado_info = $result_check->fetch_assoc()) {
+        // Permite a exclusão se o usuário logado for o autor OU for um admin
+        if ($recado_info['id_usuario'] === $id_usuario_logado || $_SESSION['role'] === 'admin') {
+            $stmt_delete = $conn->prepare("DELETE FROM recados WHERE id_recado = ?");
+            $stmt_delete->bind_param('i', $id_recado_para_excluir);
+            $stmt_delete->execute();
+            $stmt_delete->close();
+        }
+    }
+    $stmt_check->close();
+    header('Location: inicio.php');
+    exit();
+}
+
+
+// --- LÓGICA PARA BUSCAR OS DADOS DO DASHBOARD ---
+$recados = $conn->query("SELECT r.id_recado, r.mensagem, r.criado_em, u.nome as nome_autor, r.id_usuario FROM recados r JOIN usuarios u ON r.id_usuario = u.id ORDER BY r.criado_em DESC LIMIT 5")->fetch_all(MYSQLI_ASSOC);
+// (O resto da sua lógica para aniversariantes, etc., pode ser adicionada aqui)
 ?>
+
 <!DOCTYPE html>
 <html lang="pt-br">
 
@@ -43,135 +60,160 @@ $data_atual = date('m-d');
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Início - La Vita Andradas</title>
     <link rel="icon" type="image/x-icon" href="img/favicon.ico">
-    <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
     <style>
-        /* Ajuste da altura dos cards */
-        .card-equal-height {
-            display: flex;
-            flex-direction: column;
-            height: 100%;
+        .main-content {
+            margin-left: 250px;
+            padding: 20px;
+            padding-top: 95px;
         }
 
-        /* Ajuste da imagem no carrossel */
-        .carousel-img {
-            height: 650px; /* altura maior para melhor visualização */
-            width: 100%;
-            object-fit: contain; /* mostra a imagem inteira sem cortar */
-            background-color: #f8f9fa; /* fundo neutro para áreas vazias */
-        }
-
-        /* Ajuste do iframe do Google Maps */
-        .carousel-map {
-            height: 650px;
-            width: 100%;
-            border: 0;
+        .card .blockquote {
+            font-size: 1rem;
         }
     </style>
 </head>
 
 <body>
-    <!-- Header -->
     <?php include 'php/header.php'; ?>
-
-    <!-- Sidebar -->
     <?php include 'php/sidebar.php'; ?>
 
-    <!-- Main Content -->
-    <div class="main-content" style="margin-left: 250px; margin-top: 70px; padding: 20px;">
-        <div class="content-wrapper">
-            <div class="row g-4">
-                
-                <!-- Cards lado a lado com mesma altura -->
-                <div class="col-md-6 d-flex align-items-stretch">
-                    <div class="card shadow-sm card-equal-height w-100">
+    <main class="main-content">
+        <div class="container-fluid">
+
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="h3 mb-0 text-gray-800">Painel de Controle</h1>
+                <span class="text-muted"><?= date('l, d \d\e F \d\e Y') ?></span>
+            </div>
+
+            <div class="row">
+                <div class="col-12 mb-4">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                            <h6 class="mb-0 fw-bold text-success"><i class="bi bi-pin-angle-fill me-2"></i>Mural de
+                                Recados</h6>
+                            <button class="btn btn-success btn-sm" data-bs-toggle="modal"
+                                data-bs-target="#modalNovoRecado">
+                                <i class="bi bi-plus-lg"></i> Adicionar Recado
+                            </button>
+                        </div>
                         <div class="card-body">
-                            <h5 class="card-title">Membros da CIPA</h5>
-                            <ul class="list-unstyled">
-                                <li><strong>Coordenador:</strong> Gabriel Barbosa - Lopes</li>
-                                <li><strong>Membro:</strong> Victor Lima - Lopes</li>
-                                <li><strong>Membro:</strong> Erivelton Patrick - Lopes</li>
-                                <li><strong>Membro:</strong> Natalia Santos - Lopes</li>
-                                <li><strong>Membro:</strong> Cássia - Monte Alto</li>
+                            <?php if (empty($recados)): ?>
+                                <p class="text-muted">Nenhum recado no mural ainda.</p>
+                            <?php else: ?>
+                                <?php foreach ($recados as $recado): ?>
+                                    <div class="d-flex justify-content-between">
+                                        <figure class="mb-3 flex-grow-1">
+                                            <blockquote class="blockquote">
+                                                <p><?= htmlspecialchars($recado['mensagem']) ?></p>
+                                            </blockquote>
+                                            <figcaption class="blockquote-footer mb-0">
+                                                Postado por <cite><?= htmlspecialchars($recado['nome_autor']) ?></cite>
+                                                em <?= date('d/m/Y \à\s H:i', strtotime($recado['criado_em'])) ?>
+                                            </figcaption>
+                                        </figure>
+                                        <?php if ($_SESSION['usuario_id'] === $recado['id_usuario'] || $_SESSION['role'] === 'admin'): ?>
+                                            <form method="POST" action="inicio.php"
+                                                onsubmit="return confirm('Tem certeza que deseja excluir este recado?');">
+                                                <input type="hidden" name="id_recado" value="<?= $recado['id_recado'] ?>">
+                                                <button type="submit" name="excluir_recado" class="btn btn-link text-danger p-0"
+                                                    title="Excluir Recado">
+                                                    <i class="bi bi-trash-fill"></i>
+                                                </button>
+                                            </form>
+                                        <?php endif; ?>
+                                    </div>
+                                    <hr>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-xl-3 col-lg-6 mb-4">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-header py-3">
+                            <h6 class="mb-0 fw-bold text-success"><i class="bi bi-people-fill me-2"></i>Funcionários
+                            </h6>
+                        </div>
+                        <div class="card-body d-flex align-items-center justify-content-center">
+                            <p class="display-4 fw-bold text-secondary">128</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-xl-3 col-lg-6 mb-4">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-header py-3">
+                            <h6 class="mb-0 fw-bold text-success"><i class="bi bi-person-plus-fill me-2"></i>Novos na
+                                Equipe</h6>
+                        </div>
+                        <div class="card-body">
+                            <ul class="list-group list-group-flush">
+                                <li class="list-group-item"><strong>Lucas Mendes</strong> (TI)</li>
+                                <li class="list-group-item"><strong>Carla Souza</strong> (Financeiro)</li>
                             </ul>
                         </div>
                     </div>
                 </div>
-
-                <div class="col-md-6 d-flex align-items-stretch">
-                    <div class="card shadow-sm card-equal-height w-100">
+                <div class="col-xl-3 col-lg-6 mb-4">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-header py-3">
+                            <h6 class="mb-0 fw-bold text-success"><i class="bi bi-cake2-fill me-2"></i>Aniversário do
+                                Dia</h6>
+                        </div>
                         <div class="card-body">
-                            <h5 class="card-title">Aniversariantes do dia 🎉</h5>
-                            <p class="text-muted">Nenhum aniversariante hoje.</p>
+                            <ul class="list-group list-group-flush">
+                                <li class="list-group-item">Parabéns, <strong>Ana Pereira</strong>!</li>
+                            </ul>
                         </div>
                     </div>
                 </div>
-
-                <!-- Carrossel -->
-                <div class="col-md-12">
-                    <div class="card shadow-sm">
+                <div class="col-xl-3 col-lg-6 mb-4">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-header py-3">
+                            <h6 class="mb-0 fw-bold text-success"><i class="bi bi-shield-lock-fill me-2"></i>Membros da CIPA</h6>
+                        </div>
                         <div class="card-body">
-                            <h5 class="card-title">Destaques</h5>
-                            <div id="carouselDestaques" class="carousel slide" data-bs-ride="carousel">
-                                <div class="carousel-inner">
-                                    
-                                    <!-- Slide 1: Localização -->
-                                    <div class="carousel-item active">
-                                        <iframe
-                                            src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3699.30208358041!2d-46.53779622507858!3d-21.99973340608409!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x94c9bde72e52dfe3%3A0x1b47b8a5813be424!2sLa%20Vita%20-%20Andradas!5e0!3m2!1spt-BR!2sbr!4v1743094142856!5m2!1spt-BR!2sbr"
-                                            class="carousel-map rounded"
-                                            allowfullscreen=""
-                                            loading="lazy"
-                                            referrerpolicy="no-referrer-when-downgrade"></iframe>
-                                    </div>
-
-                                    <!-- Slide 2: Imagem Institucional -->
-                                    <div class="carousel-item">
-                                        <img src="img/banner1.jpg" class="carousel-img rounded" alt="Banner Institucional">
-                                        <div class="carousel-caption d-none d-md-block bg-dark bg-opacity-50 rounded p-2">
-                                            <h5>Bem-vindo ao Sistema La Vita Andradas</h5>
-                                            <p>Gerencie suas operações com mais eficiência.</p>
-                                        </div>
-                                    </div>
-
-                                    <!-- Slide 3: Conteúdo Futuro -->
-                                    <div class="carousel-item">
-                                        <img src="img/banner2.jpg" class="carousel-img rounded" alt="Slide Extra">
-                                        <div class="carousel-caption d-none d-md-block bg-dark bg-opacity-50 rounded p-2">
-                                            <h5>Novidades em breve</h5>
-                                            <p>Fique atento para futuras atualizações do sistema.</p>
-                                        </div>
-                                    </div>
-
-                                </div>
-
-                                <!-- Controles do carrossel -->
-                                <button class="carousel-control-prev" type="button" data-bs-target="#carouselDestaques" data-bs-slide="prev">
-                                    <span class="carousel-control-prev-icon" aria-hidden="true"></span>
-                                    <span class="visually-hidden">Anterior</span>
-                                </button>
-                                <button class="carousel-control-next" type="button" data-bs-target="#carouselDestaques" data-bs-slide="next">
-                                    <span class="carousel-control-next-icon" aria-hidden="true"></span>
-                                    <span class="visually-hidden">Próximo</span>
-                                </button>
-
-                                <!-- Indicadores -->
-                                <div class="carousel-indicators">
-                                    <button type="button" data-bs-target="#carouselDestaques" data-bs-slide-to="0" class="active" aria-current="true" aria-label="Slide 1"></button>
-                                    <button type="button" data-bs-target="#carouselDestaques" data-bs-slide-to="1" aria-label="Slide 2"></button>
-                                    <button type="button" data-bs-target="#carouselDestaques" data-bs-slide-to="2" aria-label="Slide 3"></button>
-                                </div>
-                            </div>
+                            <ul class="list-group list-group-flush">
+                                <li class="list-group-item"><strong>Coordenador:</strong> Nome 1</li>
+                                <li class="list-group-item"><strong>Vice:</strong> Nome 2</li>
+                                <li class="list-group-item"><strong>Encarregado:</strong> Nome 3</li>
+                            </ul>
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+    </main>
 
+    <div class="modal fade" id="modalNovoRecado" tabindex="-1" aria-labelledby="modalNovoRecadoLabel"
+        aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalNovoRecadoLabel">Adicionar Novo Recado</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form method="POST" action="inicio.php">
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label for="mensagem_recado" class="form-label">Sua mensagem:</label>
+                            <textarea class="form-control" id="mensagem_recado" name="mensagem_recado" rows="4"
+                                required></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" name="novo_recado" class="btn btn-primary">Postar Recado</button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
 
-    <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 

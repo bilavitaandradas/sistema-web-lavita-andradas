@@ -30,7 +30,7 @@ if (!empty($busca)) {
     $query_usuarios .= " WHERE u.nome LIKE ? OR u.username LIKE ?";
 }
 
-$query_usuarios .= " ORDER BY u.id ASC";
+$query_usuarios .= " ORDER BY u.nome ASC";
 
 // 4. Prepara e executa a consulta de forma segura
 $stmt = $conn->prepare($query_usuarios);

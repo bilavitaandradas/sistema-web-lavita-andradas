@@ -70,7 +70,8 @@ $resultCampos = $stmtCampos->get_result();
     <meta charset="UTF-8">
     <title>Editar Campos - <?= htmlspecialchars($questionario['nome_questionario']) ?></title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="icon" type="image/x-icon" href="/TCC/img/favicon.ico" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link rel="icon" type="image/x-icon" href="/TCC/img/favicon.ico">
 </head>
 
 <body>

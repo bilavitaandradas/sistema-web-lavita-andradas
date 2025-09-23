@@ -12,7 +12,7 @@ if (!$username || !$password) {
 }
 
 try {
-    $stmt = $conn->prepare("SELECT id, username, password, nome, role, sitio FROM usuarios WHERE username = ? AND status = 'ATIVO' LIMIT 1");
+    $stmt = $conn->prepare("SELECT id, username, password, nome, role, nome_sitio FROM usuarios WHERE username = ? AND status = 'ATIVO' LIMIT 1");
     $stmt->bind_param("s", $username);
     $stmt->execute();
     $result = $stmt->get_result();
@@ -44,7 +44,7 @@ try {
             'username' => $user['username'],
             'nome' => $user['nome'],
             'role' => $user['role'],
-            'sitio' => $user['sitio']
+            'nome_sitio' => $user['nome_sitio']
         ]
     ]);
 

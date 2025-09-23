@@ -13,8 +13,8 @@ if (!isset($_GET['id']) || !is_numeric($_GET['id'])) {
 $id_usuario_para_editar = (int)$_GET['id'];
 
 $mensagem = "";
-$roles = ['usuario', 'gerente', 'admin', 'qualidade', 'rh', 'manutencao', 'estoque','produção'];
-$status_options = ['ATIVO', 'DESLIGADO'];
+$roles = ['usuario', 'gerente', 'admin', 'qualidade', 'rh', 'manutencao', 'estoque', 'produção'];
+$status_options = ['ATIVO', 'DESATIVADO'];
 $sitios = $conn->query("SELECT id_sitio, nome_sitio FROM sitios ORDER BY nome_sitio")->fetch_all(MYSQLI_ASSOC);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -37,12 +37,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif (!empty($password) && $password !== $password_confirm) {
             $mensagem = '<div class="alert alert-warning">As novas senhas não coincidem.</div>';
         } else {
+            // --- LÓGICA DE ATUALIZAÇÃO CORRIGIDA ---
             if (!empty($password)) {
                 $password_hash = password_hash($password, PASSWORD_DEFAULT);
+                // Consulta UPDATE usando a coluna 'nome_sitio'
                 $stmt_update = $conn->prepare("UPDATE usuarios SET nome = ?, username = ?, role = ?, nome_sitio = ?, status = ?, password = ? WHERE id = ?");
-                $stmt_update->bind_param('sssis_si', $nome, $username, $role, $sitio_id, $status, $password_hash, $id_usuario_para_editar);
+                // String de tipos corrigida: sssissi (7 parâmetros)
+                $stmt_update->bind_param('sssissi', $nome, $username, $role, $sitio_id, $status, $password_hash, $id_usuario_para_editar);
             } else {
+                // Consulta UPDATE usando a coluna 'nome_sitio'
                 $stmt_update = $conn->prepare("UPDATE usuarios SET nome = ?, username = ?, role = ?, nome_sitio = ?, status = ? WHERE id = ?");
+                // String de tipos corrigida: sssisi (6 parâmetros)
                 $stmt_update->bind_param('sssisi', $nome, $username, $role, $sitio_id, $status, $id_usuario_para_editar);
             }
 
@@ -57,7 +62,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Busca os dados atuais do usuário para preencher o formulário
+// Busca os dados atuais do usuário para preencher o formulário, usando a coluna 'nome_sitio'
 $stmt_user = $conn->prepare("SELECT nome, username, role, nome_sitio, status FROM usuarios WHERE id = ?");
 $stmt_user->bind_param('i', $id_usuario_para_editar);
 $stmt_user->execute();
