@@ -30,7 +30,7 @@ try {
     }
 
     $token = bin2hex(random_bytes(32)); 
-    $expiry_date = date('Y-m-d H:i:s', strtotime('+30 days'));
+    $expiry_date = date('Y-m-d H:i:s', strtotime('+365 days'));
 
     $stmt_update_token = $conn->prepare("UPDATE usuarios SET auth_token = ?, token_expires_at = ? WHERE id = ?");
     $stmt_update_token->bind_param("ssi", $token, $expiry_date, $user['id']);

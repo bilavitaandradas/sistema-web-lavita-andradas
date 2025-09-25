@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class ApiService {
-  static const String baseUrl = 'http://192.168.172.102/TCC/app/api'; // Use 10.0.2.2 para emulador ou o IP da sua máquina para celular físico
+  static const String baseUrl = 'http://192.168.172.231/TCC/app/api'; // Use 10.0.2.2 para emulador ou o IP da sua máquina para celular físico
 
   // --- MÉTODO DE LOGIN ---
   static Future<Map<String, dynamic>> login(String username, String password) async {
