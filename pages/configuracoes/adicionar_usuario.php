@@ -9,7 +9,7 @@ require_once '../../php/config.php';
 $mensagem = "";
 // Busca a lista de Sítios do banco de dados para o dropdown
 $sitios = $conn->query("SELECT id_sitio, nome_sitio FROM sitios ORDER BY nome_sitio")->fetch_all(MYSQLI_ASSOC);
-$roles = ['usuario', 'gerente', 'admin', 'qualidade', 'rh', 'manutencao', 'estoque','produção'];
+$roles = ['gerente', 'admin', 'qualidade', 'rh', 'manutencao', 'estoque','fiscal','compras','produção',];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $nome = trim($_POST['nome']);

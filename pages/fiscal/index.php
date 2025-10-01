@@ -8,7 +8,7 @@ if (!isset($_SESSION['usuario_id'])) {
 }
 
 // Verificar se o usuário tem permissão para acessar Financeiro
-if (!isset($_SESSION['role']) || !in_array($_SESSION['role'], ['admin', 'manutencao'])) {
+if (!isset($_SESSION['role']) || !in_array($_SESSION['role'], ['admin', 'fiscal'])) {
     header('Location: ../../inicio.php');
     exit();
 }

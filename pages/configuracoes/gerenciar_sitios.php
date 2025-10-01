@@ -81,7 +81,7 @@ if (isset($_GET['action'])) {
 }
 
 // Busca todos os sítios para exibir na lista
-$lista_de_sitios = $conn->query("SELECT * FROM sitios ORDER BY nome_sitio ASC")->fetch_all(MYSQLI_ASSOC);
+$lista_de_sitios = $conn->query("SELECT * FROM sitios ORDER BY id_sitio ASC")->fetch_all(MYSQLI_ASSOC);
 ?>
 
 <!DOCTYPE html>

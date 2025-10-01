@@ -8,22 +8,24 @@ if (!isset($_SESSION['usuario_id'])) {
 }
 
 // Verificar se o usuário tem permissão para acessar Financeiro
-if (!isset($_SESSION['role']) || !in_array($_SESSION['role'], ['admin', 'gerente', 'administrativo'])) {
+if (!isset($_SESSION['role']) || !in_array($_SESSION['role'], ['admin', 'compras'])) {
     header('Location: ../../inicio.php');
     exit();
 }
 ?>
 <!DOCTYPE html>
 <html lang="pt-br">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Financeiro - La Vita Andradas</title>
     <link rel="icon" type="image/x-icon" href="../../img/favicon.ico">
     <!-- Bootstrap 5 CSS via CDN -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
-        integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
 </head>
+
 <body>
     <!-- Header -->
     <?php include '../../php/header.php'; ?>
@@ -34,13 +36,9 @@ if (!isset($_SESSION['role']) || !in_array($_SESSION['role'], ['admin', 'gerente
     <!-- Main Content -->
     <div class="main-content" style="margin-left: 250px; margin-top: 70px; padding: 20px;">
         <div class="content-wrapper">
-            <h2 class="mb-4">Setor Financeiro</h2>
-            <div class="card shadow-sm">
-                <div class="card-body">
-                    <p class="card-text">Esta seção está em desenvolvimento. Em breve, você poderá gerenciar as finanças da empresa.</p>
-                </div>
-            </div>
+            <h2 class="mb-4">Setor de Compras</h2>
         </div>
+    </div>
     </div>
 
     <!-- Bootstrap 5 JS via CDN -->
@@ -48,4 +46,5 @@ if (!isset($_SESSION['role']) || !in_array($_SESSION['role'], ['admin', 'gerente
         integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
         crossorigin="anonymous"></script>
 </body>
+
 </html>

@@ -80,7 +80,7 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen> {
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
-              color: Colors.blue,
+              color: Colors.green,
             ),
           ),
           const Divider(),
@@ -100,7 +100,7 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen> {
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
-              color: Colors.blue,
+              color: Colors.green,
             ),
           ),
           const Divider(),
@@ -112,7 +112,7 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen> {
             ),
             title: Text(
               'Limpar Lançamentos Offline',
-              style: TextStyle(color: Colors.orange.shade800),
+              style: TextStyle(color: Colors.red.shade800),
             ),
             subtitle: const Text(
               'Apaga todos os dados salvos no celular que ainda não foram sincronizados.',
@@ -125,7 +125,7 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen> {
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
-              color: Colors.blue,
+              color: Colors.green,
             ),
           ),
           const Divider(),

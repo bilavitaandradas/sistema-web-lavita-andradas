@@ -13,7 +13,7 @@ if (!isset($_GET['id']) || !is_numeric($_GET['id'])) {
 $id_usuario_para_editar = (int)$_GET['id'];
 
 $mensagem = "";
-$roles = ['gerente', 'admin', 'qualidade', 'rh', 'manutencao', 'estoque', 'produção'];
+$roles = ['gerente', 'admin', 'qualidade', 'rh', 'manutencao', 'estoque','fiscal','compras','produção'];
 $status_options = ['ATIVO', 'DESATIVADO'];
 $sitios = $conn->query("SELECT id_sitio, nome_sitio FROM sitios ORDER BY nome_sitio")->fetch_all(MYSQLI_ASSOC);
 
