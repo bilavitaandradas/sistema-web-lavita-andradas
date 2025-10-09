@@ -9,7 +9,7 @@ if (!isset($_SESSION['usuario_id'])) {
     exit();
 }
 
-// --- LÓGICA PARA PROCESSAR UM NOVO RECADO ---
+// PROCESSAR UM NOVO RECADO
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['novo_recado'])) {
     $mensagem_recado = trim($_POST['mensagem_recado']);
     if (!empty($mensagem_recado)) {
@@ -22,7 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['novo_recado'])) {
     }
 }
 
-// --- NOVA LÓGICA PARA EXCLUIR UM RECADO ---
+// EXCLUIR UM RECADO
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['excluir_recado'])) {
     $id_recado_para_excluir = (int) $_POST['id_recado'];
     $id_usuario_logado = (int) $_SESSION['usuario_id'];
@@ -33,7 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['excluir_recado'])) {
     $stmt_check->execute();
     $result_check = $stmt_check->get_result();
     if ($recado_info = $result_check->fetch_assoc()) {
-        // Permite a exclusão se o usuário logado for o autor OU for um admin
+        // exclusão se o usuário logado for o autor OU for um admin
         if ($recado_info['id_usuario'] === $id_usuario_logado || $_SESSION['role'] === 'admin') {
             $stmt_delete = $conn->prepare("DELETE FROM recados WHERE id_recado = ?");
             $stmt_delete->bind_param('i', $id_recado_para_excluir);
@@ -49,7 +49,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['excluir_recado'])) {
 
 // --- LÓGICA PARA BUSCAR OS DADOS DO DASHBOARD ---
 $recados = $conn->query("SELECT r.id_recado, r.mensagem, r.criado_em, u.nome as nome_autor, r.id_usuario FROM recados r JOIN usuarios u ON r.id_usuario = u.id ORDER BY r.criado_em DESC LIMIT 5")->fetch_all(MYSQLI_ASSOC);
-// (O resto da sua lógica para aniversariantes, etc., pode ser adicionada aqui)
+// (O resto da sua lógica para aniversariantes vai ser adicionada aqui)
 ?>
 
 <!DOCTYPE html>
@@ -136,11 +136,13 @@ $recados = $conn->query("SELECT r.id_recado, r.mensagem, r.criado_em, u.nome as 
                 <div class="col-xl-3 col-lg-6 mb-4">
                     <div class="card shadow-sm h-100">
                         <div class="card-header py-3">
-                            <h6 class="mb-0 fw-bold text-success"><i class="bi bi-people-fill me-2"></i>Funcionários
+                            <h6 class="mb-0 fw-bold text-success"><i class="bi bi-people-fill me-2">
+
+                            </i>Funcionários
                             </h6>
                         </div>
                         <div class="card-body d-flex align-items-center justify-content-center">
-                            <p class="display-4 fw-bold text-secondary">128</p>
+                            <p class="display-4 fw-bold text-secondary"></p>
                         </div>
                     </div>
                 </div>
@@ -148,13 +150,11 @@ $recados = $conn->query("SELECT r.id_recado, r.mensagem, r.criado_em, u.nome as 
                     <div class="card shadow-sm h-100">
                         <div class="card-header py-3">
                             <h6 class="mb-0 fw-bold text-success"><i class="bi bi-person-plus-fill me-2"></i>Novos na
-                                Equipe</h6>
+                                Empresa</h6>
                         </div>
                         <div class="card-body">
                             <ul class="list-group list-group-flush">
-                                <li class="list-group-item"><strong>Lucas Mendes</strong> (TI)</li>
-                                <li class="list-group-item"><strong>Carla Souza</strong> (Financeiro)</li>
-                            </ul>
+
                         </div>
                     </div>
                 </div>
@@ -166,7 +166,7 @@ $recados = $conn->query("SELECT r.id_recado, r.mensagem, r.criado_em, u.nome as 
                         </div>
                         <div class="card-body">
                             <ul class="list-group list-group-flush">
-                                <li class="list-group-item">Parabéns, <strong>Ana Pereira</strong>!</li>
+
                             </ul>
                         </div>
                     </div>
@@ -178,9 +178,9 @@ $recados = $conn->query("SELECT r.id_recado, r.mensagem, r.criado_em, u.nome as 
                         </div>
                         <div class="card-body">
                             <ul class="list-group list-group-flush">
-                                <li class="list-group-item"><strong>Coordenador:</strong> Nome 1</li>
-                                <li class="list-group-item"><strong>Vice:</strong> Nome 2</li>
-                                <li class="list-group-item"><strong>Encarregado:</strong> Nome 3</li>
+                                <li class="list-group-item">Nome 1</li>
+                                <li class="list-group-item">Nome 2</li>
+                                <li class="list-group-item">Nome 3</li>
                             </ul>
                         </div>
                     </div>

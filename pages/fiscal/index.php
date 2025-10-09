@@ -36,7 +36,7 @@ if (!isset($_SESSION['role']) || !in_array($_SESSION['role'], ['admin', 'fiscal'
     <!-- Main Content -->
     <div class="main-content" style="margin-left: 250px; margin-top: 70px; padding: 20px;">
         <div class="content-wrapper">
-            <h2 class="mb-4">Setor de Manutenção</h2>
+            <h2 class="mb-4">Setor Fiscal</h2>
         </div>
     </div>
     </div>

@@ -35,10 +35,6 @@ if (!isset($_SESSION['role']) || !in_array($_SESSION['role'], ['admin', 'gerente
     <div class="main-content" style="margin-left: 250px; margin-top: 70px; padding: 20px;">
         <div class="content-wrapper">
             <h2 class="mb-4">Setor de Estoque</h2>
-            <div class="card shadow-sm">
-                <div class="card-body">
-                    <p class="card-text">Esta seção está em desenvolvimento. Em breve, você poderá gerenciar o estoque da empresa.</p>
-                </div>
             </div>
         </div>
     </div>

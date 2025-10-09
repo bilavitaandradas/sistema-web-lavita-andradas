@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class ApiService {
-  static const String baseUrl = 'http://192.168.65.46/TCC/app/api'; // Use 10.0.2.2 para emulador ou o IP da sua máquina para celular físico
+  static const String baseUrl = 'http://10.0.12.108/TCC/app/api'; //10.0.2.2 para emulador ou o IP celular
 
   // --- MÉTODO DE LOGIN ---
   static Future<Map<String, dynamic>> login(String username, String password) async {
@@ -18,7 +18,7 @@ class ApiService {
     return jsonDecode(response.body);
   }
 
-  // --- NOVO MÉTODO PRINCIPAL PARA O "SYNC DOWN" ---
+  // -"SYNC DOWN"
   // Busca todos os dados necessários para o app funcionar offline.
   static Future<Map<String, dynamic>> getDadosParaSincronizar(String token) async {
     final url = Uri.parse('$baseUrl/get_dados_app.php');
@@ -43,7 +43,7 @@ class ApiService {
     }
   }
   
-  // --- MÉTODO PRINCIPAL PARA O "SYNC UP" ---
+  // MÉTODO PRINCIPAL PARA O "SYNC UP"
   // Envia os lançamentos feitos offline para o servidor.
   static Future<Map<String, dynamic>> sincronizarLancamentos(String token, List<Map<String, dynamic>> lancamentos) async {
     final url = Uri.parse('$baseUrl/sincronizar.php');
@@ -62,7 +62,7 @@ class ApiService {
     }
   }
 
-  // --- MÉTODOS ANTIGOS (Podem ser removidos ou mantidos para referência) ---
+  // MÉTODOS ANTIGOS (Podem ser removidos ou mantidos para referência)
 
   static Future<List<dynamic>> getQuestionarios(String token) async {
     final url = Uri.parse('$baseUrl/questionarios.php');
