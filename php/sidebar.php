@@ -27,7 +27,7 @@ $active_page = basename($_SERVER['SCRIPT_NAME']);
                 </a>
             </li>
                 
-            <?php if (isset($_SESSION['role']) && in_array($_SESSION['role'], ['admin', 'gerente'])) { ?>
+            <?php if (isset($_SESSION['role']) && in_array($_SESSION['role'], ['admin','qualidade', 'gerente'])) { ?>
                 <li class="nav-item mb-1">
                     <a href="/TCC/pages/questionarios/index.php"
                         class="nav-link <?php echo ($active_section == 'questionarios') ? 'active' : 'text-dark'; ?>">

@@ -8,6 +8,9 @@ require_once '../../vendor/autoload.php';
 // Importa as classes que vamos usar
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use PhpOffice\PhpSpreadsheet\Shared\Date; // Importante: para converter datas
+use PhpOffice\PhpSpreadsheet\Style\NumberFormat; // Importante: para formatar datas
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate; // Importante: para manipular colunas (A, B, C...)
 
 // Inclui a configuração do banco
 require_once '../../php/config.php';
@@ -20,11 +23,12 @@ function formatarValorParaXLS($valor, $tipo)
     }
     switch ($tipo) {
         case 'DATE':
-            // Converte de aaaa-mm-dd para dd/mm/aaaa
+            // ALTERAÇÃO: Não converte para string. Converte para "Número de Excel"
             $d = DateTime::createFromFormat('Y-m-d', $valor);
-            return $d ? $d->format('d/m/Y') : $valor;
+            return $d ? Date::PHPToExcel($d) : $valor;
         case 'TIME':
-            // Garante o formato HH:mm
+            // Mantemos string ou podemos converter para fração de dia (Excel Time) se necessário.
+            // Por simplicidade, mantemos a formatação visual aqui, mas idealmente seria igual data.
             $d = DateTime::createFromFormat('H:i:s', $valor);
             if ($d) return $d->format('H:i');
             $d = DateTime::createFromFormat('H:i', $valor);
@@ -45,7 +49,7 @@ $idQuestionario = intval($_GET['id_questionario']);
 $dataInicio = $_GET['data_inicio'];
 $dataFim = $_GET['data_fim'];
 
-// Busca os metadados dos campos (perguntas), incluindo o TIPO de cada um
+// Busca os metadados dos campos
 $stmtMeta = $conn->prepare("SELECT id_campo, nome_campo, tipo_campo FROM campos_questionario WHERE id_questionario = ? ORDER BY id_campo ASC");
 $stmtMeta->bind_param('i', $idQuestionario);
 $stmtMeta->execute();
@@ -59,7 +63,7 @@ while ($campo = $resultMeta->fetch_assoc()) {
 }
 $stmtMeta->close();
 
-// --- CONSULTA ATUALIZADA PARA BUSCAR TAMBÉM O NOME DO SÍTIO ---
+// Busca nomes do questionário e sítio
 $stmtNome = $conn->prepare("
     SELECT q.nome_questionario, s.nome_sitio
     FROM questionarios q
@@ -68,12 +72,11 @@ $stmtNome = $conn->prepare("
 ");
 $stmtNome->bind_param('i', $idQuestionario);
 $stmtNome->execute();
-$stmtNome->bind_result($nomeQuestionario, $nomeSitio); // Duas variáveis de resultado
+$stmtNome->bind_result($nomeQuestionario, $nomeSitio);
 $stmtNome->fetch();
 $stmtNome->close();
-// -----------------------------------------------------------
 
-// Busca os dados das respostas, filtrando por 'criado_em'
+// Busca os dados das respostas
 $queryDados = "SELECT r.id_lancamento, r.criado_em, r.id_campo, r.valor_resposta, u.nome AS nome_usuario FROM respostas_questionario AS r JOIN usuarios AS u ON r.id_usuario = u.id WHERE r.id_questionario = ? AND DATE(r.criado_em) BETWEEN ? AND ? ORDER BY r.id_lancamento, r.id_campo";
 $stmtDados = $conn->prepare($queryDados);
 $stmtDados->bind_param('iss', $idQuestionario, $dataInicio, $dataFim);
@@ -85,7 +88,16 @@ $lancamentosFormatados = [];
 while ($linha = $resultDados->fetch_assoc()) {
     $idLancamento = $linha['id_lancamento'];
     if (!isset($lancamentosFormatados[$idLancamento])) {
-        $lancamentosFormatados[$idLancamento] = ['id_lancamento' => $idLancamento, 'usuario' => $linha['nome_usuario'], 'criado_em' => date('d/m/Y H:i:s', strtotime($linha['criado_em'])), 'respostas' => []];
+        // ALTERAÇÃO: Convertendo a data de criação ('criado_em') para Excel Date também
+        $dataCriacaoObj = new DateTime($linha['criado_em']); // Cria objeto Data
+        $dataCriacaoExcel = Date::PHPToExcel($dataCriacaoObj); // Converte para número do Excel
+
+        $lancamentosFormatados[$idLancamento] = [
+            'id_lancamento' => $idLancamento, 
+            'usuario' => $linha['nome_usuario'], 
+            'criado_em' => $dataCriacaoExcel, // Passar o número, não a string
+            'respostas' => []
+        ];
     }
     $lancamentosFormatados[$idLancamento]['respostas'][$linha['id_campo']] = $linha['valor_resposta'];
 }
@@ -96,14 +108,14 @@ $spreadsheet = new Spreadsheet();
 $sheet = $spreadsheet->getActiveSheet();
 $sheet->setTitle(substr($nomeQuestionario, 0, 31));
 
-// Monta o cabeçalho, incluindo a nova coluna "Sítio"
+// Monta o cabeçalho
 $cabecalho = ['Data/Hora Lançamento', 'ID Lançamento', 'Usuário', 'Sítio'];
 foreach ($colunas as $colunaInfo) {
     $cabecalho[] = $colunaInfo['nome'];
 }
 $sheet->fromArray($cabecalho, NULL, 'A1');
 
-// Monta as linhas de dados, incluindo o Sítio
+// Monta as linhas de dados
 $linhaAtual = 2;
 foreach ($lancamentosFormatados as $lancamento) {
     // Adiciona o nome do Sítio na linha
@@ -117,10 +129,40 @@ foreach ($lancamentosFormatados as $lancamento) {
     $linhaAtual++;
 }
 
-// Formatação e download do arquivo
+// --- FORMATAÇÃO DAS CÉLULAS  ---
+
+// 1. Descobrir até qual linha existe dados
+$ultimaLinha = $linhaAtual - 1;
+if ($ultimaLinha < 2) $ultimaLinha = 2; // Segurança caso não tenha dados
+
+// 2. Formatar a Coluna A (Data de Lançamento) que é fixa
+// Formatamos como Data e Hora: dd/mm/yyyy hh:mm:ss
+$sheet->getStyle('A2:A' . $ultimaLinha)
+      ->getNumberFormat()
+      ->setFormatCode('dd/mm/yyyy hh:mm:ss');
+
+// 3. Formatar as colunas dinâmicas (começam na coluna E, índice 5)
+$colIndex = 5; // A=1, B=2, C=3, D=4, Coluna E = 5
+foreach ($colunas as $colunaInfo) {
+    // Se o tipo do campo for DATE, aplicar a formatação na coluna inteira
+    if ($colunaInfo['tipo'] === 'DATE') {
+        // Converte índice numérico (5) para letra ('E')
+        $colLetter = Coordinate::stringFromColumnIndex($colIndex);
+        
+        // Aplica o formato dd/mm/yyyy na coluna inteira (da linha 2 até a última)
+        $sheet->getStyle($colLetter . '2:' . $colLetter . $ultimaLinha)
+              ->getNumberFormat()
+              ->setFormatCode('dd/mm/yyyy'); // ou NumberFormat::FORMAT_DATE_DDMMYYYY
+    }
+    
+    $colIndex++;
+}
+
+// Ajuste automático de largura
 foreach (range('A', $sheet->getHighestDataColumn()) as $col) {
     $sheet->getColumnDimension($col)->setAutoSize(true);
 }
+
 $nomeArquivo = "exportacao_" . preg_replace('/[^a-z0-9_]/i', '', str_replace(' ', '_', $nomeQuestionario)) . "_" . date('Y_m_d') . ".xlsx";
 header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
 header('Content-Disposition: attachment;filename="' . $nomeArquivo . '"');

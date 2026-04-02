@@ -2,7 +2,7 @@
 header("Content-Type: application/json; charset=UTF-8");
 include_once '../../php/config.php';
 
-// --- Validação do Token (AGORA COM O MÉTODO CORRETO E ROBUSTO) ---
+//Validação do Token
 $token = null;
 $auth_header = $_SERVER['HTTP_AUTHORIZATION'] ?? null; 
 if ($auth_header === null) {

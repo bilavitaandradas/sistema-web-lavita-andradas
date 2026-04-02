@@ -8,7 +8,7 @@ if (!isset($_SESSION['usuario_id'])) {
 }
 
 // Verificar se o usuário tem permissão para acessar a página
-if (!isset($_SESSION['role']) || !in_array($_SESSION['role'], ['admin', 'gerente'])) {
+if (!isset($_SESSION['role']) || !in_array($_SESSION['role'], ['admin','qualidade', 'gerente'])) {
     header('Location: /TCC/inicio.php');
     exit();
 }

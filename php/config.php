@@ -5,10 +5,9 @@ date_default_timezone_set('America/Sao_Paulo');
 
 // Configurações do banco de dados
 $host = 'localhost';
-$usuario = 'root'; // Usuário padrão do XAMPP
-$senha = ''; // Senha padrão do XAMPP (geralmente vazia)
+$usuario = 'bandradas';
+$senha = 'N@q*o1GvxpljKTC_'; //Nova senha DB
 $banco = 'la_vita_andradas';
-
 
 // Criar conexão
 $conn = new mysqli($host, $usuario, $senha, $banco);
