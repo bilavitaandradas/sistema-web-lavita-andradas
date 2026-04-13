@@ -1,7 +1,7 @@
 <?php
 session_start();
 
-// Verificar se o usuário está logadoThe requested URL was not found on this server.
+// Verificar se o usuário está logado
 if (!isset($_SESSION['usuario_id'])) {
     header('TCC/index.php');
     exit();

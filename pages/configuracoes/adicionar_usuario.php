@@ -35,7 +35,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $password_hash = password_hash($password, PASSWORD_DEFAULT);
 
-            // Query de inserção agora inclui o 'sitio'
+            // Query de inserção
             $stmt_insert = $conn->prepare("INSERT INTO usuarios (nome, username, password, role, nome_sitio) VALUES (?, ?, ?, ?, ?)");
             $stmt_insert->bind_param('ssssi', $nome, $username, $password_hash, $role, $sitio_id);
 

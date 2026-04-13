@@ -2,8 +2,7 @@
 header("Content-Type: application/json; charset=UTF-8");
 include_once '../../php/config.php';
 
-// --- 1. VALIDAÇÃO DO TOKEN DE AUTENTICAÇÃO ---
-// (Reutilizamos nossa lógica de validação de token segura e robusta)
+//1. VALIDAÇÃO DO TOKEN DE AUTENTICAÇÃO
 $token = null;
 $auth_header = $_SERVER['HTTP_AUTHORIZATION'] ?? null;
 if ($auth_header === null) {
@@ -28,10 +27,9 @@ if ($result_user->num_rows === 0) {
 $user = $result_user->fetch_assoc();
 $id_usuario_logado = $user['id'];
 $stmt_user->close();
-// --------------------------------------------------
 
 try {
-    // --- 2. BUSCAR OS QUESTIONÁRIOS PERMITIDOS PARA O USUÁRIO ---
+    //2. BUSCAR OS QUESTIONÁRIOS PERMITIDOS PARA O USUÁRIO
     $query_q = "
         SELECT q.id_questionario, q.nome_questionario, q.descricao_questionario
         FROM questionarios q
@@ -45,7 +43,7 @@ try {
     $questionarios = $result_q->fetch_all(MYSQLI_ASSOC);
     $stmt_q->close();
 
-    // --- 3. BUSCAR TODOS OS CAMPOS DESSES QUESTIONÁRIOS ---
+    //3. BUSCAR TODOS OS CAMPOS DESSES QUESTIONÁRIOS
     $campos = [];
     // Se encontramos algum questionário, buscamos os campos deles
     if (!empty($questionarios)) {
@@ -71,7 +69,7 @@ try {
         $stmt_c->close();
     }
     
-    // --- 4. RESPOSTA FINAL ---
+    //4. RESPOSTA FINAL
     // Envia um único JSON contendo as duas listas: questionários e campos.
     echo json_encode([
         'success' => true, 

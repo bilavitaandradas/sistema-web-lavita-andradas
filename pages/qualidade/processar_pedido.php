@@ -2,9 +2,7 @@
 session_start();
 require_once '../../php/config.php';
 
-// --- VERIFICAÇÃO DE SEGURANÇA ---
 // Garante que o usuário está logado e tem permissão para criar um pedido.
-// Ajuste as 'roles' permitidas conforme sua necessidade.
 if (!isset($_SESSION['usuario_id']) || !in_array($_SESSION['role'], ['admin', 'qualidade', 'gerente'])) {
     // Se não tiver permissão, redireciona com uma mensagem de erro.
     $_SESSION['mensagem_pedido'] = '<div class="alert alert-danger">Você não tem permissão para criar pedidos.</div>';
