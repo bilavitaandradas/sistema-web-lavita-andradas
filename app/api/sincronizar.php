@@ -48,10 +48,10 @@ if (empty($lancamentos) || !is_array($lancamentos)) {
 }
 
 // =============================
-// FUNÇÃO DE NORMALIZAÇÃO
+// FUNÇÃO SIMPLES DE NORMALIZAÇÃO
 // =============================
 function normalizarNumero($valor) {
-    $valor = trim($valor);
+    $valor = trim((string)$valor);
     $valor = str_replace(',', '.', $valor);
 
     if (!is_numeric($valor)) {
@@ -80,7 +80,7 @@ try {
         $id_questionario = $lancamento['id_questionario'];
 
         // =============================
-        // AJUSTE DE DATA
+        // DATA
         // =============================
         $dateTimeUtc = new DateTime($lancamento['criado_em_local']);
         $dateTimeLocal = $dateTimeUtc->setTimezone(new DateTimeZone(date_default_timezone_get()));
@@ -109,9 +109,7 @@ try {
 
         foreach ($respostas as $id_campo => $valor_resposta) {
 
-            $valor_resposta = trim($valor_resposta);
-
-            // 🔥 TRATAMENTO PARA NÚMEROS
+            // 🔥 TRATAMENTO APENAS PARA NUMBER
             if (isset($tipos_campos[$id_campo]) && $tipos_campos[$id_campo] === 'NUMBER') {
 
                 $valor_resposta = normalizarNumero($valor_resposta);
@@ -152,7 +150,6 @@ try {
     ]);
 }
 
-// =============================
 if (isset($stmt_insert)) $stmt_insert->close();
 $conn->close();
 ?>
