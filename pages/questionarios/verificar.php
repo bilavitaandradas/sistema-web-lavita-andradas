@@ -1,17 +1,12 @@
 <?php
-// Inicia a sessão para gerenciar o estado do usuário
 session_start();
-
-// Inclui o arquivo de configuração do banco de dados
 require_once '../../php/config.php';
 
-// Verifica se o usuário está logado, redirecionando para a página inicial se não estiver
 if (!isset($_SESSION['usuario_id'])) {
     header('Location: /TCC/index.php');
     exit();
 }
 
-// A função formatarValor continua a mesma, sem alterações
 function formatarValor($valor, $tipo)
 {
     if ($valor === null || $valor === '')
@@ -30,30 +25,32 @@ function formatarValor($valor, $tipo)
     }
 }
 
-// Consulta para obter a lista de TODOS os questionários (para que todos possam visualizar)
-$queryQuestionarios = "SELECT id_questionario, nome_questionario FROM questionarios ORDER BY nome_questionario";
+/* ===================== ALTERAÇÃO AQUI ===================== */
+$queryQuestionarios = "
+SELECT q.id_questionario, q.nome_questionario, s.nome_sitio
+FROM questionarios q
+JOIN sitios s ON q.id_sitio = s.id_sitio
+ORDER BY s.nome_sitio, q.nome_questionario
+";
 $result = $conn->query($queryQuestionarios);
 $questionarios = $result->fetch_all(MYSQLI_ASSOC);
+/* ========================================================= */
 
-// Inicializa arrays e variáveis
 $dados = [];
 $colunas = [];
 $nomeQuestionarioSelecionado = "";
-$nomeSitioSelecionado = ""; // <-- VARIÁVEL PARA GUARDAR O NOME DO SÍTIO
+$nomeSitioSelecionado = "";
 $idQuestionario = null;
 $usuario_tem_permissao = false;
 
-// 1. DETERMINAR QUAL QUESTIONÁRIO CARREGAR (VIA POST ou GET)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['questionario'])) {
     $idQuestionario = intval($_POST['questionario']);
 } elseif (isset($_GET['questionario'])) {
     $idQuestionario = intval($_GET['questionario']);
 }
 
-// 2. BUSCAR OS DADOS SE UM QUESTIONÁRIO FOI SELECIONADO
 if ($idQuestionario) {
 
-    // VERIFICAÇÃO DE PERMISSÃO DE CRUD
     $id_usuario_logado = $_SESSION['usuario_id'];
     $stmtPerm = $conn->prepare("SELECT COUNT(*) FROM questionario_permissoes WHERE id_questionario = ? AND id_usuario = ?");
     $stmtPerm->bind_param("ii", $idQuestionario, $id_usuario_logado);
@@ -65,7 +62,6 @@ if ($idQuestionario) {
         $usuario_tem_permissao = true;
     }
 
-    // --- BUSCAR O NOME DO SÍTIO ---
     $stmt = $conn->prepare("
         SELECT q.nome_questionario, s.nome_sitio
         FROM questionarios q
@@ -74,13 +70,10 @@ if ($idQuestionario) {
     ");
     $stmt->bind_param('i', $idQuestionario);
     $stmt->execute();
-    // Agora temos duas variáveis para receber os resultados
     $stmt->bind_result($nomeQuestionarioSelecionado, $nomeSitioSelecionado);
     $stmt->fetch();
     $stmt->close();
-    // -----------------------------------------------------
 
-    // O restante da busca de dados continua normalmente...
     $stmtCampos = $conn->prepare("SELECT id_campo, nome_campo, tipo_campo FROM campos_questionario WHERE id_questionario = ?");
     $stmtCampos->bind_param('i', $idQuestionario);
     $stmtCampos->execute();
@@ -97,25 +90,30 @@ if ($idQuestionario) {
     $stmtLancamentos->bind_param('i', $idQuestionario);
     $stmtLancamentos->execute();
     $resultLancamentos = $stmtLancamentos->get_result();
+
     while ($lancamento = $resultLancamentos->fetch_assoc()) {
         $idLancamento = $lancamento['id_lancamento'];
         $criadoEm = date('d/m/Y H:i:s', strtotime($lancamento['criado_em']));
         $idUsuario = $lancamento['id_usuario'];
+
         $stmtUser = $conn->prepare("SELECT nome FROM usuarios WHERE id = ?");
         $stmtUser->bind_param('i', $idUsuario);
         $stmtUser->execute();
         $stmtUser->bind_result($nomeUsuario);
         $stmtUser->fetch();
         $stmtUser->close();
+
         $stmtRespostas = $conn->prepare("SELECT id_campo, valor_resposta FROM respostas_questionario WHERE id_lancamento = ?");
         $stmtRespostas->bind_param('s', $idLancamento);
         $stmtRespostas->execute();
         $resultRespostas = $stmtRespostas->get_result();
+
         $respostas = [];
         while ($resp = $resultRespostas->fetch_assoc()) {
             $respostas[$resp['id_campo']] = $resp['valor_resposta'];
         }
         $stmtRespostas->close();
+
         $dados[] = [
             'id_lancamento' => $idLancamento,
             'criado_em' => $criadoEm,
@@ -123,6 +121,7 @@ if ($idQuestionario) {
             'respostas' => $respostas
         ];
     }
+
     $stmtLancamentos->close();
 }
 ?>
@@ -133,76 +132,94 @@ if ($idQuestionario) {
 <head>
     <meta charset="UTF-8">
     <title>Verificar Respostas</title>
+
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+
+    <!-- SELECT2 -->
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+
     <link rel="icon" type="image/x-icon" href="/TCC/img/favicon.ico">
 </head>
 
 <body>
-    <?php include '../../php/header.php'; ?>
-    <?php include '../../php/sidebar.php'; ?>
+<?php include '../../php/header.php'; ?>
+<?php include '../../php/sidebar.php'; ?>
 
-    <div class="container mt-5" style="margin-left: 250px;">
-        <h1>Verificar Respostas</h1>
+<div class="container mt-5" style="margin-left: 250px;">
+    <h1>Verificar Respostas</h1>
 
-        <form method="POST" class="mb-4">
-            <label for="questionario" class="form-label">Selecione o Questionário:</label>
-            <select name="questionario" id="questionario" class="form-select" required>
-                <option value="">Selecione...</option>
-                <?php foreach ($questionarios as $q): ?>
-                    <option value="<?= $q['id_questionario'] ?>" <?= (isset($idQuestionario) && $idQuestionario == $q['id_questionario']) ? 'selected' : '' ?>>
-                        <?= htmlspecialchars($q['nome_questionario']) ?>
-                    </option>
-                <?php endforeach; ?>
-            </select>
-            <button type="submit" class="btn btn-primary mt-2">Carregar</button>
-        </form>
+    <form method="POST" class="mb-4">
+        <label for="questionario" class="form-label">Selecione o Questionário:</label>
 
-        <?php if (!empty($dados)): ?>
-            <h3>Últimos 30 lançamentos de: <?= htmlspecialchars($nomeQuestionarioSelecionado) ?> (Sítio:
-                <?= htmlspecialchars($nomeSitioSelecionado) ?>)</h3>
+        <select name="questionario" id="questionario" class="form-select" required>
+            <option value="">Selecione ou pesquise...</option>
+            <?php foreach ($questionarios as $q): ?>
+                <option value="<?= $q['id_questionario'] ?>" <?= (isset($idQuestionario) && $idQuestionario == $q['id_questionario']) ? 'selected' : '' ?>>
+                    [<?= htmlspecialchars($q['nome_sitio']) ?>] - <?= htmlspecialchars($q['nome_questionario']) ?>
+                </option>
+            <?php endforeach; ?>
+        </select>
 
-            <table id="tabelaRespostas" class="table table-bordered table-striped">
-                <thead class="table-dark">
-                    <tr>
-                        <th class="text-center">ID Lanç.</th>
-                        <th class="text-center">Usuário</th>
-                        <th class="text-center">Data/Hora</th>
-                        <th class="text-center">Sítio</th>
-                        <?php foreach ($colunas as $campoInfo): ?>
-                            <th class="text-center"><?= htmlspecialchars($campoInfo['nome']) ?></th>
-                        <?php endforeach; ?>
-                        <th class="text-center">Ações</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($dados as $dado): ?>
-                        <tr>
-                            <td><?= htmlspecialchars($dado['id_lancamento']) ?></td>
-                            <td><?= htmlspecialchars($dado['usuario']) ?></td>
-                            <td><?= htmlspecialchars($dado['criado_em']) ?></td>
-                            <td><?= htmlspecialchars($nomeSitioSelecionado) ?></td>
-                            <?php foreach ($colunas as $idCampo => $campoInfo): ?>
-                                <td><?= formatarValor($dado['respostas'][$idCampo] ?? '-', $campoInfo['tipo']) ?></td>
-                            <?php endforeach; ?>
+        <button type="submit" class="btn btn-primary mt-2">Carregar</button>
+    </form>
 
-                            <td class="text-center">
-                                <?php if ($usuario_tem_permissao): ?>
-                                    <a href="editar_lancamento.php?id=<?= urlencode($dado['id_lancamento']) ?>"
-                                        class="btn btn-sm btn-warning">Editar</a>
-                                    <a href="excluir_lancamento.php?id=<?= urlencode($dado['id_lancamento']) ?>&qid=<?= urlencode($idQuestionario) ?>"
-                                        class="btn btn-sm btn-danger"
-                                        onclick="return confirm('Tem certeza que deseja excluir este lançamento?')">Excluir</a>
-                                <?php else: ?>
-                                    <span class="text-muted small">Sem permissão</span>
-                                <?php endif; ?>
-                            </td>
-                        </tr>
+    <?php if (!empty($dados)): ?>
+        <h3>Últimos 30 lançamentos de: <?= htmlspecialchars($nomeQuestionarioSelecionado) ?> (Sítio: <?= htmlspecialchars($nomeSitioSelecionado) ?>)</h3>
+
+        <table class="table table-bordered table-striped">
+            <thead class="table-dark">
+                <tr>
+                    <th>ID</th>
+                    <th>Usuário</th>
+                    <th>Data/Hora</th>
+                    <th>Sítio</th>
+                    <?php foreach ($colunas as $campoInfo): ?>
+                        <th><?= htmlspecialchars($campoInfo['nome']) ?></th>
                     <?php endforeach; ?>
-                </tbody>
-            </table>
-        <?php endif; ?>
-    </div>
-</body>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($dados as $dado): ?>
+                    <tr>
+                        <td><?= $dado['id_lancamento'] ?></td>
+                        <td><?= $dado['usuario'] ?></td>
+                        <td><?= $dado['criado_em'] ?></td>
+                        <td><?= $nomeSitioSelecionado ?></td>
 
+                        <?php foreach ($colunas as $idCampo => $campoInfo): ?>
+                            <td><?= formatarValor($dado['respostas'][$idCampo] ?? '-', $campoInfo['tipo']) ?></td>
+                        <?php endforeach; ?>
+
+                        <td>
+                            <?php if ($usuario_tem_permissao): ?>
+                                <a href="editar_lancamento.php?id=<?= $dado['id_lancamento'] ?>" class="btn btn-warning btn-sm">Editar</a>
+                                <a href="excluir_lancamento.php?id=<?= $dado['id_lancamento'] ?>&qid=<?= $idQuestionario ?>" class="btn btn-danger btn-sm" onclick="return confirm('Confirmar exclusão?')">Excluir</a>
+                            <?php else: ?>
+                                <span class="text-muted">Sem permissão</span>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    <?php endif; ?>
+</div>
+
+<!-- JS -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+<script>
+$(document).ready(function() {
+    $('#questionario').select2({
+        placeholder: "Selecione ou pesquise um questionário",
+        allowClear: true,
+        width: '100%'
+    });
+});
+</script>
+
+</body>
 </html>
