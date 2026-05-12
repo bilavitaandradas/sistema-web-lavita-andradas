@@ -83,8 +83,13 @@ class _HomeScreenState extends State<HomeScreen> {
               lancamentosParaSincronizar
                   .map((l) => l['id_lancamento'] as String)
                   .toList();
+
           await DatabaseService.instance.marcarComoSincronizado(
             idsSincronizados,
+          );
+        } else {
+          throw Exception(
+            responseUp['message'] ?? 'Erro desconhecido durante sincronização.',
           );
         }
       }
@@ -105,8 +110,8 @@ class _HomeScreenState extends State<HomeScreen> {
       if (mounted && showMessages) {
         ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Falha na sincronização. Verifique sua conexão.'),
+          SnackBar(
+            content: Text('Falha na sincronização: ${e.toString().replaceAll("Exception: ", "")}',),
             backgroundColor: Colors.orange,
           ),
         );
