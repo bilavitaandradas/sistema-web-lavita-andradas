@@ -140,9 +140,13 @@ class _PreenchimentoScreenState extends State<PreenchimentoScreen> {
           border: const OutlineInputBorder(),
         ),
         keyboardType: isNumber ? const TextInputType.numberWithOptions(decimal: true) : TextInputType.text,
-        inputFormatters: isNumber 
-            ? [FilteringTextInputFormatter.allow(RegExp(r'[\d.,]'))] 
-            : [],
+        inputFormatters: isNumber
+    ? [
+        FilteringTextInputFormatter.allow(
+          RegExp(r'^\d*[.,]?\d*$'),
+        ),
+      ]
+    : [],
       ),
     );
   }
