@@ -22,14 +22,15 @@ class PreenchimentoScreen extends StatefulWidget {
 class _PreenchimentoScreenState extends State<PreenchimentoScreen> {
   bool _isLoading = true;
   String _errorMessage = '';
+
   List<dynamic> _campos = [];
-  
-  // Mapa para controllers de campos de texto (incluindo os que exibem data/hora)
+
   final Map<int, TextEditingController> _controllers = {};
-  // Mapa para valores de dropdowns
   final Map<int, String?> _dropdownValues = {};
-  
-  // Mapas para guardar os valores brutos de Data e Hora, separados da exibição
+
+  // NOVO: múltipla escolha
+  final Map<int, List<String>> _checkboxValues = {};
+
   final Map<int, DateTime?> _pickedDates = {};
   final Map<int, TimeOfDay?> _pickedTimes = {};
 
@@ -39,22 +40,28 @@ class _PreenchimentoScreenState extends State<PreenchimentoScreen> {
     _fetchCamposFromLocalDB();
   }
 
-  // Busca os campos do banco de dados LOCAL (SQLite)
   Future<void> _fetchCamposFromLocalDB() async {
     try {
-      final campos = await DatabaseService.instance.getCamposDoQuestionarioLocal(widget.idQuestionario);
+      final campos = await DatabaseService.instance
+          .getCamposDoQuestionarioLocal(widget.idQuestionario);
+
       if (mounted) {
         setState(() {
           _campos = campos;
+
           for (var campo in _campos) {
             final idCampo = campo['id_campo'] as int;
             final tipoCampo = campo['tipo_campo'];
+
             if (tipoCampo == 'DROPDOWN') {
               _dropdownValues[idCampo] = null;
+            } else if (tipoCampo == 'CHECKBOX') {
+              _checkboxValues[idCampo] = [];
             } else {
               _controllers[idCampo] = TextEditingController();
             }
           }
+
           _isLoading = false;
         });
       }
@@ -76,12 +83,42 @@ class _PreenchimentoScreenState extends State<PreenchimentoScreen> {
     super.dispose();
   }
 
+  // =========================================================
+  // CONTROLE DE VISIBILIDADE (CAMPO DEPENDENTE)
+  // =========================================================
+
+  bool _campoDeveSerExibido(Map<String, dynamic> campo) {
+    final dependenteDe = campo['dependente_de'];
+    final dependenteValor = campo['dependente_valor'];
+
+    // Campo normal
+    if (dependenteDe == null ||
+        dependenteValor == null ||
+        dependenteValor.toString().isEmpty) {
+      return true;
+    }
+
+    final int idCampoPai = dependenteDe as int;
+
+    String? valorAtual;
+
+    // Verifica dropdown
+    if (_dropdownValues.containsKey(idCampoPai)) {
+      valorAtual = _dropdownValues[idCampoPai];
+    }
+
+    // Verifica texto
+    if (_controllers.containsKey(idCampoPai)) {
+      valorAtual = _controllers[idCampoPai]?.text;
+    }
+
+    return valorAtual == dependenteValor;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.nomeQuestionario),
-      ),
+      appBar: AppBar(title: Text(widget.nomeQuestionario)),
       body: _buildBody(),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _isLoading ? null : _salvarOffline,
@@ -96,14 +133,23 @@ class _PreenchimentoScreenState extends State<PreenchimentoScreen> {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
+
     if (_errorMessage.isNotEmpty) {
       return Center(child: Text('Erro: $_errorMessage'));
     }
+
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
       itemCount: _campos.length,
       itemBuilder: (context, index) {
-        return _buildFormField(_campos[index]);
+        final campo = _campos[index];
+
+        // NOVO: esconde campo dependente
+        if (!_campoDeveSerExibido(campo)) {
+          return const SizedBox.shrink();
+        }
+
+        return _buildFormField(campo);
       },
     );
   }
@@ -116,21 +162,37 @@ class _PreenchimentoScreenState extends State<PreenchimentoScreen> {
     switch (tipoCampo) {
       case 'TEXT':
         return _buildTextField(idCampo, nomeCampo);
+
       case 'NUMBER':
         return _buildTextField(idCampo, nomeCampo, isNumber: true);
+
       case 'DATE':
         return _buildDateField(idCampo, nomeCampo);
+
       case 'TIME':
         return _buildTimeField(idCampo, nomeCampo);
+
       case 'DROPDOWN':
         final List<dynamic> opcoes = jsonDecode(campo['opcoes'] ?? '[]');
+
         return _buildDropdownField(idCampo, nomeCampo, opcoes.cast<String>());
+
+      // NOVO
+      case 'CHECKBOX':
+        final List<dynamic> opcoes = jsonDecode(campo['opcoes'] ?? '[]');
+
+        return _buildCheckboxField(idCampo, nomeCampo, opcoes.cast<String>());
+
       default:
         return _buildTextField(idCampo, nomeCampo);
     }
   }
 
-  Widget _buildTextField(int idCampo, String nomeCampo, {bool isNumber = false}) {
+  Widget _buildTextField(
+    int idCampo,
+    String nomeCampo, {
+    bool isNumber = false,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 20.0),
       child: TextFormField(
@@ -139,14 +201,18 @@ class _PreenchimentoScreenState extends State<PreenchimentoScreen> {
           labelText: nomeCampo,
           border: const OutlineInputBorder(),
         ),
-        keyboardType: isNumber ? const TextInputType.numberWithOptions(decimal: true) : TextInputType.text,
-        inputFormatters: isNumber
-    ? [
-        FilteringTextInputFormatter.allow(
-          RegExp(r'^\d*[.,]?\d*$'),
-        ),
-      ]
-    : [],
+        onChanged: (_) {
+          // Atualiza campos dependentes
+          setState(() {});
+        },
+        keyboardType:
+            isNumber
+                ? const TextInputType.numberWithOptions(decimal: true)
+                : TextInputType.text,
+        inputFormatters:
+            isNumber
+                ? [FilteringTextInputFormatter.allow(RegExp(r'^\d*[.,]?\d*$'))]
+                : [],
       ),
     );
   }
@@ -164,6 +230,7 @@ class _PreenchimentoScreenState extends State<PreenchimentoScreen> {
         ),
         onTap: () async {
           FocusScope.of(context).requestFocus(FocusNode());
+
           DateTime? pickedDate = await showDatePicker(
             context: context,
             initialDate: _pickedDates[idCampo] ?? DateTime.now(),
@@ -174,7 +241,10 @@ class _PreenchimentoScreenState extends State<PreenchimentoScreen> {
           if (pickedDate != null) {
             setState(() {
               _pickedDates[idCampo] = pickedDate;
-              _controllers[idCampo]!.text = DateFormat('dd/MM/yyyy').format(pickedDate);
+
+              _controllers[idCampo]!.text = DateFormat(
+                'dd/MM/yyyy',
+              ).format(pickedDate);
             });
           }
         },
@@ -195,12 +265,15 @@ class _PreenchimentoScreenState extends State<PreenchimentoScreen> {
         ),
         onTap: () async {
           FocusScope.of(context).requestFocus(FocusNode());
+
           TimeOfDay? pickedTime = await showTimePicker(
             context: context,
             initialTime: _pickedTimes[idCampo] ?? TimeOfDay.now(),
             builder: (context, child) {
               return MediaQuery(
-                data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
+                data: MediaQuery.of(
+                  context,
+                ).copyWith(alwaysUse24HourFormat: true),
                 child: child!,
               );
             },
@@ -209,8 +282,11 @@ class _PreenchimentoScreenState extends State<PreenchimentoScreen> {
           if (pickedTime != null) {
             setState(() {
               _pickedTimes[idCampo] = pickedTime;
+
               final hour = pickedTime.hour.toString().padLeft(2, '0');
+
               final minute = pickedTime.minute.toString().padLeft(2, '0');
+
               _controllers[idCampo]!.text = '$hour:$minute';
             });
           }
@@ -219,7 +295,11 @@ class _PreenchimentoScreenState extends State<PreenchimentoScreen> {
     );
   }
 
-  Widget _buildDropdownField(int idCampo, String nomeCampo, List<String> opcoes) {
+  Widget _buildDropdownField(
+    int idCampo,
+    String nomeCampo,
+    List<String> opcoes,
+  ) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 20.0),
       child: DropdownButtonFormField<String>(
@@ -234,42 +314,175 @@ class _PreenchimentoScreenState extends State<PreenchimentoScreen> {
             _dropdownValues[idCampo] = newValue;
           });
         },
-        items: opcoes.map<DropdownMenuItem<String>>((String valor) {
-          return DropdownMenuItem<String>(
-            value: valor,
-            child: Text(valor),
-          );
-        }).toList(),
+        items:
+            opcoes.map<DropdownMenuItem<String>>((String valor) {
+              return DropdownMenuItem<String>(value: valor, child: Text(valor));
+            }).toList(),
       ),
     );
   }
-  
+
+  // =========================================================
+  // NOVO CAMPO CHECKBOX
+  // =========================================================
+
+  Widget _buildCheckboxField(
+    int idCampo,
+    String nomeCampo,
+    List<String> opcoes,
+  ) {
+    final valoresSelecionados = _checkboxValues[idCampo] ?? [];
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 20.0),
+      child: InkWell(
+        onTap: () async {
+          final selecionadosTemp = List<String>.from(valoresSelecionados);
+
+          await showModalBottomSheet(
+            context: context,
+            isScrollControlled: true,
+            builder: (context) {
+              return StatefulBuilder(
+                builder: (context, setModalState) {
+                  return Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          nomeCampo,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        Flexible(
+                          child: ListView(
+                            shrinkWrap: true,
+                            children:
+                                opcoes.map((opcao) {
+                                  final selecionado = selecionadosTemp.contains(
+                                    opcao,
+                                  );
+
+                                  return CheckboxListTile(
+                                    title: Text(opcao),
+                                    value: selecionado,
+                                    onChanged: (bool? value) {
+                                      setModalState(() {
+                                        if (value == true) {
+                                          selecionadosTemp.add(opcao);
+                                        } else {
+                                          selecionadosTemp.remove(opcao);
+                                        }
+                                      });
+                                    },
+                                  );
+                                }).toList(),
+                          ),
+                        ),
+
+                        const SizedBox(height: 12),
+
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: () {
+                              setState(() {
+                                _checkboxValues[idCampo] = selecionadosTemp;
+                              });
+
+                              Navigator.pop(context);
+                            },
+                            child: const Text('Confirmar'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              );
+            },
+          );
+        },
+
+        child: InputDecorator(
+          decoration: InputDecoration(
+            labelText: nomeCampo,
+            border: const OutlineInputBorder(),
+            suffixIcon: const Icon(Icons.arrow_drop_down),
+          ),
+
+          child: Text(
+            valoresSelecionados.isEmpty
+                ? 'Selecione...'
+                : valoresSelecionados.join(', '),
+            style: TextStyle(
+              color: valoresSelecionados.isEmpty ? Colors.grey : Colors.black,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _salvarOffline() async {
     try {
       final respostasMap = <String, dynamic>{};
-      
+
       for (var campo in _campos) {
+        // Ignora campos escondidos
+        if (!_campoDeveSerExibido(campo)) {
+          continue;
+        }
+
         final idCampo = campo['id_campo'] as int;
+
         final tipoCampo = campo['tipo_campo'];
+
         String? valorParaSalvar;
 
         switch (tipoCampo) {
           case 'DATE':
             if (_pickedDates[idCampo] != null) {
-              valorParaSalvar = DateFormat('yyyy-MM-dd').format(_pickedDates[idCampo]!);
+              valorParaSalvar = DateFormat(
+                'yyyy-MM-dd',
+              ).format(_pickedDates[idCampo]!);
             }
             break;
+
           case 'TIME':
-             if (_pickedTimes[idCampo] != null) {
-              final hour = _pickedTimes[idCampo]!.hour.toString().padLeft(2, '0');
-              final minute = _pickedTimes[idCampo]!.minute.toString().padLeft(2, '0');
+            if (_pickedTimes[idCampo] != null) {
+              final hour = _pickedTimes[idCampo]!.hour.toString().padLeft(
+                2,
+                '0',
+              );
+
+              final minute = _pickedTimes[idCampo]!.minute.toString().padLeft(
+                2,
+                '0',
+              );
+
               valorParaSalvar = '$hour:$minute';
             }
             break;
+
           case 'DROPDOWN':
             valorParaSalvar = _dropdownValues[idCampo];
             break;
-          default: // TEXT, NUMBER
+
+          // NOVO
+          case 'CHECKBOX':
+            final valores = _checkboxValues[idCampo] ?? [];
+
+            valorParaSalvar = jsonEncode(valores);
+            break;
+
+          default:
             valorParaSalvar = _controllers[idCampo]?.text;
             break;
         }
@@ -277,19 +490,29 @@ class _PreenchimentoScreenState extends State<PreenchimentoScreen> {
         if (valorParaSalvar == null || valorParaSalvar.isEmpty) {
           throw Exception('O campo "${campo['nome_campo']}" é obrigatório.');
         }
+
         respostasMap[idCampo.toString()] = valorParaSalvar;
       }
 
       final userIdString = await AuthService.instance.getUserId();
-      if (userIdString == null) throw Exception('ID do usuário não encontrado.');
+
+      if (userIdString == null) {
+        throw Exception('ID do usuário não encontrado.');
+      }
+
       final userId = int.parse(userIdString);
 
       final lancamentoData = {
         'id_lancamento': '${userId}_${DateTime.now().millisecondsSinceEpoch}',
+
         'id_questionario': widget.idQuestionario,
+
         'id_usuario': userId,
+
         'respostas': jsonEncode(respostasMap),
+
         'criado_em_local': DateTime.now().toIso8601String(),
+
         'sincronizado': 0,
       };
 
@@ -297,14 +520,23 @@ class _PreenchimentoScreenState extends State<PreenchimentoScreen> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Lançamento salvo com sucesso offline!'), backgroundColor: Colors.green),
+          const SnackBar(
+            content: Text('Lançamento salvo com sucesso offline!'),
+            backgroundColor: Colors.green,
+          ),
         );
+
         Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro ao salvar: ${e.toString().replaceAll("Exception: ", "")}'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text(
+              'Erro ao salvar: ${e.toString().replaceAll("Exception: ", "")}',
+            ),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }

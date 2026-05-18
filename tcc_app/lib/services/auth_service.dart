@@ -4,12 +4,11 @@ class AuthService {
   static final AuthService instance = AuthService._init();
   AuthService._init();
 
-  // A instância do storage vive AQUI, e apenas aqui.
   final _storage = const FlutterSecureStorage();
 
   // Salva todos os dados importantes da sessão
   Future<void> saveSession({
-    required String token, 
+    required String token,
     required String userId,
     required String nome,
     required String username,
@@ -22,22 +21,45 @@ class AuthService {
 
   // Busca o token atual
   Future<String?> getToken() async {
-    return await _storage.read(key: 'auth_token');
+    try {
+      return await _storage.read(key: 'auth_token');
+    } catch (e) {
+      await deleteSession();
+      return null;
+    }
   }
 
   // Busca o ID do usuário
   Future<String?> getUserId() async {
-    return await _storage.read(key: 'user_id');
+    try {
+      return await _storage.read(key: 'user_id');
+    } catch (e) {
+      await deleteSession();
+      return null;
+    }
   }
 
   // Busca os dados do usuário salvos para exibição
   Future<Map<String, String?>> getUserData() async {
-    final nome = await _storage.read(key: 'user_nome');
-    final username = await _storage.read(key: 'user_username');
-    return {'nome': nome, 'username': username};
+    try {
+      final nome = await _storage.read(key: 'user_nome');
+      final username = await _storage.read(key: 'user_username');
+
+      return {
+        'nome': nome,
+        'username': username,
+      };
+    } catch (e) {
+      await deleteSession();
+
+      return {
+        'nome': null,
+        'username': null,
+      };
+    }
   }
 
-  // Apaga todos os dados da sessão (faz o logout)
+  // Apaga todos os dados da sessão
   Future<void> deleteSession() async {
     await _storage.deleteAll();
   }

@@ -1,12 +1,19 @@
 <?php
-// Não precisa de sessão para esta verificação rápida
 require_once '../../php/config.php';
 
-// Valida os parâmetros de entrada
-if (!isset($_GET['id_questionario']) || !isset($_GET['data_inicio']) || !isset($_GET['data_fim'])) {
-    // Retorna um erro em formato JSON
-    header('Content-Type: application/json');
-    echo json_encode(['error' => 'Parâmetros insuficientes.']);
+// Retorna sempre JSON
+header('Content-Type: application/json');
+
+// Validação básica
+if (
+    !isset($_GET['id_questionario']) ||
+    !isset($_GET['data_inicio']) ||
+    !isset($_GET['data_fim'])
+) {
+    echo json_encode([
+        'success' => false,
+        'error' => 'Parâmetros insuficientes.'
+    ]);
     exit();
 }
 
@@ -14,18 +21,59 @@ $idQuestionario = intval($_GET['id_questionario']);
 $dataInicio = $_GET['data_inicio'];
 $dataFim = $_GET['data_fim'];
 
-// A mesma query de contagem que tínhamos antes
-$queryCount = "SELECT COUNT(DISTINCT id_lancamento) as total FROM respostas_questionario WHERE id_questionario = ? AND DATE(criado_em) BETWEEN ? AND ?";
-$stmtCount = $conn->prepare($queryCount);
-$stmtCount->bind_param('iss', $idQuestionario, $dataInicio, $dataFim);
-$stmtCount->execute();
-$stmtCount->bind_result($totalLancamentos);
-$stmtCount->fetch();
-$stmtCount->close();
+// Validação simples das datas
+if (
+    !preg_match('/^\d{4}-\d{2}-\d{2}$/', $dataInicio) ||
+    !preg_match('/^\d{4}-\d{2}-\d{2}$/', $dataFim)
+) {
+    echo json_encode([
+        'success' => false,
+        'error' => 'Formato de data inválido.'
+    ]);
+    exit();
+}
 
-// Define o cabeçalho para indicar que a resposta é JSON
-header('Content-Type: application/json');
+try {
 
-// Retorna o resultado em formato JSON
-echo json_encode(['total' => $totalLancamentos]);
+    $queryCount = "
+        SELECT COUNT(DISTINCT id_lancamento) as total
+        FROM respostas_questionario
+        WHERE id_questionario = ?
+        AND DATE(criado_em) BETWEEN ? AND ?
+    ";
+
+    $stmtCount = $conn->prepare($queryCount);
+
+    if (!$stmtCount) {
+        throw new Exception('Erro ao preparar query.');
+    }
+
+    $stmtCount->bind_param(
+        'iss',
+        $idQuestionario,
+        $dataInicio,
+        $dataFim
+    );
+
+    $stmtCount->execute();
+
+    $stmtCount->bind_result($totalLancamentos);
+    $stmtCount->fetch();
+
+    $stmtCount->close();
+
+    echo json_encode([
+        'success' => true,
+        'total' => (int)$totalLancamentos
+    ]);
+
+} catch (Exception $e) {
+
+    echo json_encode([
+        'success' => false,
+        'error' => $e->getMessage()
+    ]);
+
+}
+
 exit();

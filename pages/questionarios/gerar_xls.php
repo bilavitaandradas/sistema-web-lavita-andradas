@@ -19,23 +19,43 @@ require_once '../../php/config.php';
 function formatarValorParaXLS($valor, $tipo)
 {
     if ($valor === null || $valor === '') {
-        return ''; // Retorna vazio para a planilha
+        return '';
     }
+
     switch ($tipo) {
+
         case 'DATE':
-            // ALTERAÇÃO: Não converte para string. Converte para "Número de Excel"
             $d = DateTime::createFromFormat('Y-m-d', $valor);
             return $d ? Date::PHPToExcel($d) : $valor;
+
         case 'TIME':
-            // Mantemos string ou podemos converter para fração de dia (Excel Time) se necessário.
-            // Por simplicidade, mantemos a formatação visual aqui, mas idealmente seria igual data.
             $d = DateTime::createFromFormat('H:i:s', $valor);
-            if ($d) return $d->format('H:i');
+
+            if ($d) {
+                return $d->format('H:i');
+            }
+
             $d = DateTime::createFromFormat('H:i', $valor);
+
             return $d ? $d->format('H:i') : $valor;
+
         case 'NUMBER':
-            // Para o Excel, é melhor manter o formato com ponto decimal
             return (float) str_replace(',', '.', $valor);
+
+        case 'CHECKBOX':
+
+            // Remove entidades HTML
+            $valorLimpo = html_entity_decode($valor, ENT_QUOTES, 'UTF-8');
+
+            // Converte JSON para array
+            $array = json_decode($valorLimpo, true);
+
+            if (is_array($array)) {
+                return implode(', ', $array);
+            }
+
+            return $valorLimpo;
+
         default:
             return htmlspecialchars($valor, ENT_QUOTES, 'UTF-8');
     }
@@ -93,8 +113,8 @@ while ($linha = $resultDados->fetch_assoc()) {
         $dataCriacaoExcel = Date::PHPToExcel($dataCriacaoObj); // Converte para número do Excel
 
         $lancamentosFormatados[$idLancamento] = [
-            'id_lancamento' => $idLancamento, 
-            'usuario' => $linha['nome_usuario'], 
+            'id_lancamento' => $idLancamento,
+            'usuario' => $linha['nome_usuario'],
             'criado_em' => $dataCriacaoExcel, // Passamos o número, não a string
             'respostas' => []
         ];
@@ -133,13 +153,14 @@ foreach ($lancamentosFormatados as $lancamento) {
 
 // 1. Descobrir até qual linha temos dados
 $ultimaLinha = $linhaAtual - 1;
-if ($ultimaLinha < 2) $ultimaLinha = 2; // Segurança caso não tenha dados
+if ($ultimaLinha < 2)
+    $ultimaLinha = 2; // Segurança caso não tenha dados
 
 // 2. Formatar a Coluna A (Data de Lançamento) que é fixa
 // Formatamos como Data e Hora: dd/mm/yyyy hh:mm:ss
 $sheet->getStyle('A2:A' . $ultimaLinha)
-      ->getNumberFormat()
-      ->setFormatCode('dd/mm/yyyy hh:mm:ss');
+    ->getNumberFormat()
+    ->setFormatCode('dd/mm/yyyy hh:mm:ss');
 
 // 3. Formatar as colunas dinâmicas (começam na coluna E, índice 5)
 $colIndex = 5; // A=1, B=2, C=3, D=4, Coluna E = 5
@@ -148,13 +169,13 @@ foreach ($colunas as $colunaInfo) {
     if ($colunaInfo['tipo'] === 'DATE') {
         // Converte índice numérico (5) para letra ('E')
         $colLetter = Coordinate::stringFromColumnIndex($colIndex);
-        
+
         // Aplica o formato dd/mm/yyyy na coluna inteira (da linha 2 até a última)
         $sheet->getStyle($colLetter . '2:' . $colLetter . $ultimaLinha)
-              ->getNumberFormat()
-              ->setFormatCode('dd/mm/yyyy'); // ou NumberFormat::FORMAT_DATE_DDMMYYYY
+            ->getNumberFormat()
+            ->setFormatCode('dd/mm/yyyy'); // ou NumberFormat::FORMAT_DATE_DDMMYYYY
     }
-    
+
     $colIndex++;
 }
 
