@@ -52,18 +52,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $opcoes = null;
 
-    // DROPDOWN e CHECKBOX usam opções
     if (
         in_array($tipo_campo, ['DROPDOWN', 'CHECKBOX']) &&
-        !empty($_POST['opcoes'])
+        !empty($_POST['opcoes_lista'])
     ) {
 
-        $opcoesArray = array_map(
-            'trim',
-            explode(',', $_POST['opcoes'])
-        );
+        $opcoesArray = $_POST['opcoes_lista'];
+
+        $opcoesArray = array_map('trim', $opcoesArray);
 
         $opcoesArray = array_filter($opcoesArray);
+
+        $opcoesArray = array_unique($opcoesArray);
+
+        natcasesort($opcoesArray);
 
         $opcoes = json_encode(
             array_values($opcoesArray),
@@ -123,186 +125,235 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     <title>Editar Campo</title>
 
-    <link
-        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
-        rel="stylesheet"
-    >
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 
-    <link
-        href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
-        rel="stylesheet"
-    >
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
 
-    <link
-        rel="icon"
-        type="image/x-icon"
-        href="/TCC/img/favicon.ico"
-    >
+    <link rel="icon" type="image/x-icon" href="/TCC/img/favicon.ico">
 
 </head>
 
 <body>
 
-<?php include '../../php/header.php'; ?>
-<?php include '../../php/sidebar.php'; ?>
+    <?php include '../../php/header.php'; ?>
+    <?php include '../../php/sidebar.php'; ?>
 
-<main class="main-content p-5" style="margin-left: 250px;">
+    <main class="main-content p-5" style="margin-left: 250px;">
 
-    <h2>Editar Campo</h2>
+        <h2>Editar Campo</h2>
 
-    <?= $mensagem ?>
+        <?= $mensagem ?>
 
-    <form method="post">
+        <form method="post">
 
-        <div class="mb-3">
+            <div class="mb-3">
 
-            <label class="form-label">
-                Nome do Campo
-            </label>
+                <label class="form-label">
+                    Nome do Campo
+                </label>
 
-            <input
-                type="text"
-                name="nome_campo"
-                class="form-control"
-                value="<?= htmlspecialchars($campo['nome_campo']) ?>"
-                required
-            >
+                <input type="text" name="nome_campo" class="form-control"
+                    value="<?= htmlspecialchars($campo['nome_campo']) ?>" required>
 
-        </div>
+            </div>
 
-        <div class="mb-3">
+            <div class="mb-3">
 
-            <label class="form-label">
-                Tipo do Campo
-            </label>
+                <label class="form-label">
+                    Tipo do Campo
+                </label>
 
-            <select
-                name="tipo_campo"
-                id="tipo_campo"
-                class="form-select"
-                required
-            >
+                <select name="tipo_campo" id="tipo_campo" class="form-select" required>
 
-                <option
-                    value="TEXT"
-                    <?= $campo['tipo_campo'] == 'TEXT' ? 'selected' : '' ?>
-                >
-                    Texto
-                </option>
+                    <option value="TEXT" <?= $campo['tipo_campo'] == 'TEXT' ? 'selected' : '' ?>>
+                        Texto
+                    </option>
 
-                <option
-                    value="NUMBER"
-                    <?= $campo['tipo_campo'] == 'NUMBER' ? 'selected' : '' ?>
-                >
-                    Número
-                </option>
+                    <option value="NUMBER" <?= $campo['tipo_campo'] == 'NUMBER' ? 'selected' : '' ?>>
+                        Número
+                    </option>
 
-                <option
-                    value="DATE"
-                    <?= $campo['tipo_campo'] == 'DATE' ? 'selected' : '' ?>
-                >
-                    Data
-                </option>
+                    <option value="DATE" <?= $campo['tipo_campo'] == 'DATE' ? 'selected' : '' ?>>
+                        Data
+                    </option>
 
-                <option
-                    value="TIME"
-                    <?= $campo['tipo_campo'] == 'TIME' ? 'selected' : '' ?>
-                >
-                    Hora
-                </option>
+                    <option value="TIME" <?= $campo['tipo_campo'] == 'TIME' ? 'selected' : '' ?>>
+                        Hora
+                    </option>
 
-                <option
-                    value="DROPDOWN"
-                    <?= $campo['tipo_campo'] == 'DROPDOWN' ? 'selected' : '' ?>
-                >
-                    Dropdown
-                </option>
+                    <option value="DROPDOWN" <?= $campo['tipo_campo'] == 'DROPDOWN' ? 'selected' : '' ?>>
+                        Dropdown
+                    </option>
 
-                <option
-                    value="CHECKBOX"
-                    <?= $campo['tipo_campo'] == 'CHECKBOX' ? 'selected' : '' ?>
-                >
-                    Múltipla Escolha
-                </option>
+                    <option value="CHECKBOX" <?= $campo['tipo_campo'] == 'CHECKBOX' ? 'selected' : '' ?>>
+                        Múltipla Escolha
+                    </option>
 
-            </select>
+                </select>
 
-        </div>
+            </div>
 
-        <div class="mb-3" id="container_opcoes">
+            <div class="mb-3" id="container_opcoes">
 
-            <label class="form-label">
-                Opções
-            </label>
+                <label class="form-label">
+                    Opções
+                </label>
 
-            <textarea
-                name="opcoes"
-                class="form-control"
-                rows="5"
-                placeholder="Separar opções por vírgula"
-            ><?=
-                in_array($campo['tipo_campo'], ['DROPDOWN', 'CHECKBOX'])
-                    ? htmlspecialchars(
-                        json_decode($campo['opcoes'], true)
-                            ? implode(',', json_decode($campo['opcoes'], true))
-                            : ''
-                    )
-                    : ''
-            ?></textarea>
+                <div class="input-group mb-2">
 
-            <small class="text-muted">
-                Exemplo:
-                Luva,Óculos,Botina,Capacete
-            </small>
+                    <input type="text" id="novaOpcao" class="form-control" placeholder="Digite uma opção">
 
-        </div>
+                    <button type="button" class="btn btn-primary" onclick="adicionarOpcao()">
+                        Adicionar
+                    </button>
 
-        <button
-            type="submit"
-            class="btn btn-primary"
-        >
-            Salvar
-        </button>
+                </div>
 
-        <a
-            href="editar_campos.php?id_questionario=<?= $campo['id_questionario'] ?>"
-            class="btn btn-secondary"
-        >
-            Voltar
-        </a>
+                <div id="listaOpcoes" class="border rounded p-2" style="min-height:120px;"></div>
 
-    </form>
+            </div>
 
-</main>
+            <button type="submit" class="btn btn-primary">
+                Salvar
+            </button>
 
-<script>
+            <a href="editar_campos.php?id_questionario=<?= $campo['id_questionario'] ?>" class="btn btn-secondary">
+                Voltar
+            </a>
 
-const tipoCampo =
-    document.getElementById('tipo_campo');
+        </form>
 
-const containerOpcoes =
-    document.getElementById('container_opcoes');
+    </main>
 
-function toggleOpcoes() {
+    <script>
 
-    const mostrar =
-        ['DROPDOWN', 'CHECKBOX']
-        .includes(tipoCampo.value);
+        const tipoCampo =
+            document.getElementById('tipo_campo');
 
-    containerOpcoes.style.display =
-        mostrar ? 'block' : 'none';
-}
+        const containerOpcoes =
+            document.getElementById('container_opcoes');
 
-tipoCampo.addEventListener(
-    'change',
-    toggleOpcoes
-);
+        function toggleOpcoes() {
 
-toggleOpcoes();
+            const mostrar =
+                ['DROPDOWN', 'CHECKBOX']
+                    .includes(tipoCampo.value);
 
-</script>
+            containerOpcoes.style.display =
+                mostrar ? 'block' : 'none';
+        }
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+        let opcoes = <?= json_encode(
+            json_decode($campo['opcoes'] ?? '[]', true) ?: [],
+            JSON_UNESCAPED_UNICODE
+        ); ?>;
+
+        function renderizarOpcoes() {
+
+            opcoes.sort((a, b) =>
+                a.localeCompare(
+                    b,
+                    'pt-BR',
+                    { sensitivity: 'base' }
+                )
+            );
+
+            let html = '';
+
+            opcoes.forEach((opcao, index) => {
+
+                html += `
+            <div class="d-flex justify-content-between align-items-center border-bottom py-1">
+
+                <span>${opcao}</span>
+
+                <div>
+
+                    <input
+                        type="hidden"
+                        name="opcoes_lista[]"
+                        value="${opcao}"
+                    >
+
+                    <button
+                        type="button"
+                        class="btn btn-sm btn-danger"
+                        onclick="removerOpcao(${index})"
+                    >
+                        <i class="bi bi-trash"></i>
+                    </button>
+
+                </div>
+
+            </div>
+        `;
+            });
+
+            document.getElementById('listaOpcoes').innerHTML = html;
+        }
+
+        function adicionarOpcao() {
+
+            const campo =
+                document.getElementById('novaOpcao');
+
+            const valor =
+                campo.value.trim();
+
+            if (!valor) {
+                return;
+            }
+
+            const existe = opcoes.some(
+                o => o.toLowerCase() === valor.toLowerCase()
+            );
+
+            if (existe) {
+
+                alert('Esta opção já foi adicionada.');
+
+                return;
+            }
+
+            opcoes.push(valor);
+
+            campo.value = '';
+
+            renderizarOpcoes();
+        }
+
+        function removerOpcao(index) {
+
+            opcoes.splice(index, 1);
+
+            renderizarOpcoes();
+        }
+
+        document
+            .getElementById('novaOpcao')
+            .addEventListener('keypress', function (e) {
+
+                if (e.key === 'Enter') {
+
+                    e.preventDefault();
+
+                    adicionarOpcao();
+                }
+            });
+
+        renderizarOpcoes();
+
+        tipoCampo.addEventListener(
+            'change',
+            toggleOpcoes
+        );
+
+        toggleOpcoes();
+
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
 </body>
+
 </html>
