@@ -3,6 +3,8 @@ import 'package:tcc_app/screens/auth_check_screen.dart';
 import 'package:tcc_app/services/auth_service.dart';
 import 'package:tcc_app/services/api_service.dart';
 import 'package:tcc_app/services/database_service.dart';
+import 'package:tcc_app/services/update_service.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'configuracoes_screen.dart';
 import 'gerenciar_offline_screen.dart';
 import 'meus_lancamentos_screen.dart';
@@ -24,9 +26,12 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _sincronizarTudo(
-      showMessages: false,
-    ); // Sincronização silenciosa na inicialização
+
+    _sincronizarTudo(showMessages: false);
+
+    Future.delayed(const Duration(seconds: 2), () {
+      _verificarAtualizacao();
+    });
   }
 
   Future<void> _loadData({bool showLoading = true}) async {
@@ -111,7 +116,9 @@ class _HomeScreenState extends State<HomeScreen> {
         ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Falha na sincronização: ${e.toString().replaceAll("Exception: ", "")}',),
+            content: Text(
+              'Falha na sincronização: ${e.toString().replaceAll("Exception: ", "")}',
+            ),
             backgroundColor: Colors.orange,
           ),
         );
@@ -148,6 +155,53 @@ class _HomeScreenState extends State<HomeScreen> {
         (Route<dynamic> route) => false,
       );
     }
+  }
+
+  Future<void> _verificarAtualizacao() async {
+    final dados = await UpdateService.verificarAtualizacao();
+
+    if (!mounted || dados == null) {
+      return;
+    }
+
+    final apkUrl = dados['apk_url'];
+    final force = dados['force'] ?? false;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return PopScope(
+          canPop: !force,
+          child: AlertDialog(
+            title: Text(
+              force ? 'Atualização obrigatória' : 'Atualização disponível',
+            ),
+
+            content: Text('Nova versão ${dados['version']} disponível.'),
+
+            actions: [
+              if (!force)
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                  },
+                  child: const Text('Depois'),
+                ),
+
+              ElevatedButton(
+                onPressed: () async {
+                  final uri = Uri.parse(apkUrl);
+
+                  await launchUrl(uri, mode: LaunchMode.externalApplication);
+                },
+                child: const Text('Atualizar'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   @override

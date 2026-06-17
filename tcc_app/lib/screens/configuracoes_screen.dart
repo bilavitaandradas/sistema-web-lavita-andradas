@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../services/database_service.dart';
 
+import 'package:package_info_plus/package_info_plus.dart';
+
 class ConfiguracoesScreen extends StatefulWidget {
   const ConfiguracoesScreen({super.key});
 
@@ -12,11 +14,23 @@ class ConfiguracoesScreen extends StatefulWidget {
 class _ConfiguracoesScreenState extends State<ConfiguracoesScreen> {
   String _nome = 'Carregando...';
   String _username = 'Carregando...';
+  String _versao = 'Carregando...';
 
   @override
   void initState() {
     super.initState();
     _loadUserData();
+    _loadVersion();
+  }
+
+  Future<void> _loadVersion() async {
+    final packageInfo = await PackageInfo.fromPlatform();
+
+    if (mounted) {
+      setState(() {
+        _versao = '${packageInfo.version} (${packageInfo.buildNumber})';
+      });
+    }
   }
 
   // Busca os dados do usuário que salvamos no armazenamento seguro
@@ -129,10 +143,10 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen> {
             ),
           ),
           const Divider(),
-          const ListTile(
-            leading: Icon(Icons.info_outline),
-            title: Text('Versão'),
-            subtitle: Text('1.0.0'),
+          ListTile(
+            leading: const Icon(Icons.info_outline),
+            title: const Text('Versão'),
+            subtitle: Text(_versao),
           ),
         ],
       ),
