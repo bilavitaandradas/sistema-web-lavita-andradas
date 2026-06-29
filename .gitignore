@@ -2,3 +2,8 @@
 /vendor/
 # Ignorar arquivos de ambiente (se usarmos no futuro)
 .env
+# APKs publicados
+app/update/
+
+# Arquivos temporários
+app/api/debug_json.txt
