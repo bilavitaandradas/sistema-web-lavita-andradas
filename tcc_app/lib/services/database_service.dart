@@ -20,7 +20,7 @@ class DatabaseService {
     // Versão 3, para criar as novas tabelas de cache
     return await openDatabase(
       path,
-      version: 3,
+      version: 4,
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
@@ -32,9 +32,18 @@ class DatabaseService {
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    debugPrint(
-      'DB_SERVICE: Executando _onUpgrade... Atualizando banco da versão $oldVersion para $newVersion.',
-    );
+    if (oldVersion < 4) {
+      await db.execute(
+        'ALTER TABLE campos_questionario '
+        'ADD COLUMN dependente_de INTEGER',
+      );
+
+      await db.execute(
+        'ALTER TABLE campos_questionario '
+        'ADD COLUMN dependente_valor TEXT',
+      );
+    }
+
     await _createTables(db);
   }
 
@@ -65,6 +74,8 @@ class DatabaseService {
         id_questionario INTEGER NOT NULL,
         nome_campo TEXT NOT NULL,
         tipo_campo TEXT NOT NULL,
+        dependente_de INTEGER,
+        dependente_valor TEXT,
         opcoes TEXT,
         FOREIGN KEY (id_questionario) REFERENCES questionarios (id_questionario) ON DELETE CASCADE
       )

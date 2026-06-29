@@ -152,6 +152,8 @@ $stmtDependencias = $conn->prepare("
     SELECT id_campo, nome_campo
     FROM campos_questionario
     WHERE id_questionario = ?
+    AND tipo_campo = 'DROPDOWN'
+    AND dependente_de IS NULL
     ORDER BY nome_campo ASC
 ");
 

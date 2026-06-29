@@ -43,6 +43,27 @@ if (!$campo) {
 
 $mensagem = "";
 
+// Busca campos disponíveis para dependência
+$stmtDependencias = $conn->prepare("
+    SELECT id_campo, nome_campo
+    FROM campos_questionario
+    WHERE id_questionario = ?
+    AND id_campo <> ?
+    AND tipo_campo = 'DROPDOWN'
+    AND dependente_de IS NULL
+    ORDER BY nome_campo ASC
+");
+
+$stmtDependencias->bind_param(
+    "ii",
+    $campo['id_questionario'],
+    $id_campo
+);
+
+$stmtDependencias->execute();
+
+$camposDependencia = $stmtDependencias->get_result();
+
 // Se o formulário foi submetido
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
@@ -51,6 +72,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $tipo_campo = $_POST['tipo_campo'];
 
     $opcoes = null;
+
+    $dependente_de = !empty($_POST['dependente_de'])
+        ? intval($_POST['dependente_de'])
+        : null;
+
+    $dependente_valor = !empty($_POST['dependente_valor'])
+        ? trim($_POST['dependente_valor'])
+        : null;
 
     if (
         in_array($tipo_campo, ['DROPDOWN', 'CHECKBOX']) &&
@@ -79,15 +108,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             nome_campo = ?,
             tipo_campo = ?,
             opcoes = ?,
+            dependente_de = ?,
+            dependente_valor = ?,
             atualizado_em = NOW()
         WHERE id_campo = ?
     ");
 
     $stmt->bind_param(
-        "sssi",
+        "sssisi",
         $nome_campo,
         $tipo_campo,
         $opcoes,
+        $dependente_de,
+        $dependente_valor,
         $id_campo
     );
 
@@ -103,6 +136,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $campo['nome_campo'] = $nome_campo;
         $campo['tipo_campo'] = $tipo_campo;
         $campo['opcoes'] = $opcoes;
+        $campo['dependente_de'] = $dependente_de;
+        $campo['dependente_valor'] = $dependente_valor;
 
     } else {
 
@@ -193,6 +228,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             </div>
 
+
             <div class="mb-3" id="container_opcoes">
 
                 <label class="form-label">
@@ -210,6 +246,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
 
                 <div id="listaOpcoes" class="border rounded p-2" style="min-height:120px;"></div>
+
+            </div>
+
+            <hr>
+
+            <h5>Dependência (Opcional)</h5>
+
+            <div class="mb-3">
+
+                <label class="form-label">
+                    Depende de qual campo?
+                </label>
+
+                <select name="dependente_de" class="form-select">
+
+                    <option value="">
+                        Nenhum
+                    </option>
+
+                    <?php while ($dep = $camposDependencia->fetch_assoc()): ?>
+
+                        <option value="<?= $dep['id_campo'] ?>" <?= $campo['dependente_de'] == $dep['id_campo'] ? 'selected' : '' ?>
+                            >
+
+                            <?= htmlspecialchars($dep['nome_campo']) ?>
+
+                        </option>
+
+                    <?php endwhile; ?>
+
+                </select>
+
+            </div>
+
+            <div class="mb-3">
+
+                <label class="form-label">
+                    Mostrar quando valor for:
+                </label>
+
+                <input type="text" name="dependente_valor" class="form-control"
+                    value="<?= htmlspecialchars($campo['dependente_valor'] ?? '') ?>" placeholder="Ex: Americana">
 
             </div>
 

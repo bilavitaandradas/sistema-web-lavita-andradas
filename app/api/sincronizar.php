@@ -52,7 +52,8 @@ if (empty($lancamentos) || !is_array($lancamentos)) {
 // =============================
 // FUNÇÃO DE NORMALIZAÇÃO
 // =============================
-function normalizarNumero($valor) {
+function normalizarNumero($valor)
+{
     $valor = trim($valor);
     $valor = str_replace(',', '.', $valor);
 
@@ -78,7 +79,7 @@ try {
 
     foreach ($lancamentos as $lancamento) {
 
-        $id_lancamento   = $lancamento['id_lancamento'];
+        $id_lancamento = $lancamento['id_lancamento'];
         $id_questionario = $lancamento['id_questionario'];
 
         // =============================
@@ -111,15 +112,29 @@ try {
 
         foreach ($respostas as $id_campo => $valor_resposta) {
 
-            $valor_resposta = trim($valor_resposta);
+            // Remove espaços
+            if ($valor_resposta !== null) {
+                $valor_resposta = trim($valor_resposta);
+            }
 
-            // 🔥 TRATAMENTO PARA NÚMEROS
-            if (isset($tipos_campos[$id_campo]) && $tipos_campos[$id_campo] === 'NUMBER') {
+            // Campo vazio -> NULL
+            if ($valor_resposta === '') {
+                $valor_resposta = null;
+            }
+
+            // Tratamento de campos numéricos
+            if (
+                isset($tipos_campos[$id_campo]) &&
+                $tipos_campos[$id_campo] === 'NUMBER' &&
+                $valor_resposta !== null
+            ) {
 
                 $valor_resposta = normalizarNumero($valor_resposta);
 
                 if ($valor_resposta === null) {
-                    throw new Exception("Valor inválido para campo numérico (campo ID: $id_campo)");
+                    throw new Exception(
+                        "Valor inválido para campo numérico (campo ID: $id_campo)"
+                    );
                 }
             }
 
@@ -155,6 +170,7 @@ try {
 }
 
 // =============================
-if (isset($stmt_insert)) $stmt_insert->close();
+if (isset($stmt_insert))
+    $stmt_insert->close();
 $conn->close();
 ?>

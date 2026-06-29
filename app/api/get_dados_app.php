@@ -56,7 +56,7 @@ try {
         $types = str_repeat('i', count($questionario_ids));
 
         $query_c = "
-            SELECT id_campo, id_questionario, nome_campo, tipo_campo, opcoes
+            SELECT id_campo, id_questionario, nome_campo, tipo_campo, opcoes, dependente_de, dependente_valor
             FROM campos_questionario
             WHERE id_questionario IN ($placeholders)
         ";

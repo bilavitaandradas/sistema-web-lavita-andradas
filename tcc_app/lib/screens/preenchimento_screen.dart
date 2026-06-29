@@ -44,7 +44,9 @@ class _PreenchimentoScreenState extends State<PreenchimentoScreen> {
     try {
       final campos = await DatabaseService.instance
           .getCamposDoQuestionarioLocal(widget.idQuestionario);
-
+      for (final campo in campos) {
+        debugPrint(campo.toString());
+      }
       if (mounted) {
         setState(() {
           _campos = campos;
@@ -113,6 +115,40 @@ class _PreenchimentoScreenState extends State<PreenchimentoScreen> {
     }
 
     return valorAtual == dependenteValor;
+  }
+
+  void _limparCamposDependentes(int idCampoPai) {
+    for (final campo in _campos) {
+      if (campo['dependente_de'] != idCampoPai) {
+        continue;
+      }
+
+      final int idFilho = campo['id_campo'];
+      final String tipo = campo['tipo_campo'];
+
+      switch (tipo) {
+        case 'DROPDOWN':
+          _dropdownValues[idFilho] = null;
+          break;
+
+        case 'CHECKBOX':
+          _checkboxValues[idFilho] = [];
+          break;
+
+        case 'DATE':
+        case 'TIME':
+        case 'TEXT':
+        case 'NUMBER':
+        default:
+          _controllers[idFilho]?.clear();
+          _pickedDates[idFilho] = null;
+          _pickedTimes[idFilho] = null;
+          break;
+      }
+
+      // Limpa dependências em cascata
+      _limparCamposDependentes(idFilho);
+    }
   }
 
   @override
@@ -311,7 +347,11 @@ class _PreenchimentoScreenState extends State<PreenchimentoScreen> {
         hint: const Text('Selecione...'),
         onChanged: (String? newValue) {
           setState(() {
-            _dropdownValues[idCampo] = newValue;
+            if (_dropdownValues[idCampo] != newValue) {
+              _dropdownValues[idCampo] = newValue;
+
+              _limparCamposDependentes(idCampo);
+            }
           });
         },
         items:
@@ -431,15 +471,47 @@ class _PreenchimentoScreenState extends State<PreenchimentoScreen> {
   }
 
   Future<void> _salvarOffline() async {
+    // Validação dos campos obrigatórios visíveis
+    for (final campo in _campos) {
+      if (!_campoDeveSerExibido(campo)) {
+        continue;
+      }
+
+      final idCampo = campo['id_campo'];
+      final tipo = campo['tipo_campo'];
+
+      bool preenchido = false;
+
+      switch (tipo) {
+        case 'DROPDOWN':
+          preenchido = _dropdownValues[idCampo] != null;
+          break;
+
+        case 'CHECKBOX':
+          preenchido = (_checkboxValues[idCampo] ?? []).isNotEmpty;
+          break;
+
+        default:
+          preenchido = _controllers[idCampo]?.text.trim().isNotEmpty ?? false;
+          break;
+      }
+
+      if (!preenchido) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Preencha o campo "${campo['nome_campo']}".'),
+            backgroundColor: Colors.red,
+          ),
+        );
+
+        return;
+      }
+    }
+
     try {
       final respostasMap = <String, dynamic>{};
 
       for (var campo in _campos) {
-        // Ignora campos escondidos
-        if (!_campoDeveSerExibido(campo)) {
-          continue;
-        }
-
         final idCampo = campo['id_campo'] as int;
 
         final tipoCampo = campo['tipo_campo'];
@@ -487,11 +559,7 @@ class _PreenchimentoScreenState extends State<PreenchimentoScreen> {
             break;
         }
 
-        if (valorParaSalvar == null || valorParaSalvar.isEmpty) {
-          throw Exception('O campo "${campo['nome_campo']}" é obrigatório.');
-        }
-
-        respostasMap[idCampo.toString()] = valorParaSalvar;
+        respostasMap[idCampo.toString()] = valorParaSalvar ?? '';
       }
 
       final userIdString = await AuthService.instance.getUserId();
