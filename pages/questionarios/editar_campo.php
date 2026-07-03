@@ -45,12 +45,11 @@ $mensagem = "";
 
 // Busca campos disponíveis para dependência
 $stmtDependencias = $conn->prepare("
-    SELECT id_campo, nome_campo
+    SELECT id_campo, nome_campo, opcoes
     FROM campos_questionario
     WHERE id_questionario = ?
     AND id_campo <> ?
     AND tipo_campo = 'DROPDOWN'
-    AND dependente_de IS NULL
     ORDER BY nome_campo ASC
 ");
 
@@ -63,6 +62,20 @@ $stmtDependencias->bind_param(
 $stmtDependencias->execute();
 
 $camposDependencia = $stmtDependencias->get_result();
+
+$dependenciasJS = [];
+
+$camposDependencia->data_seek(0);
+
+while ($dep = $camposDependencia->fetch_assoc()) {
+
+    $dependenciasJS[$dep['id_campo']] = [
+        'nome' => $dep['nome_campo'],
+        'opcoes' => json_decode($dep['opcoes'], true) ?? []
+    ];
+}
+
+$camposDependencia->data_seek(0);
 
 // Se o formulário foi submetido
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -77,9 +90,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ? intval($_POST['dependente_de'])
         : null;
 
-    $dependente_valor = !empty($_POST['dependente_valor'])
-        ? trim($_POST['dependente_valor'])
-        : null;
+    if (!empty($_POST['dependente_valor'])) {
+
+    $dependente_valor = json_encode(
+        array_values($_POST['dependente_valor']),
+        JSON_UNESCAPED_UNICODE
+    );
+
+} else {
+
+    $dependente_valor = null;
+}
 
     if (
         in_array($tipo_campo, ['DROPDOWN', 'CHECKBOX']) &&
@@ -139,6 +160,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $campo['dependente_de'] = $dependente_de;
         $campo['dependente_valor'] = $dependente_valor;
 
+        $dependenteValorSelecionado =
+    json_decode($campo['dependente_valor'], true);
+
+if (!is_array($dependenteValorSelecionado)) {
+    $dependenteValorSelecionado = [];
+}
     } else {
 
         $mensagem = "
@@ -282,14 +309,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             <div class="mb-3">
 
-                <label class="form-label">
-                    Mostrar quando valor for:
-                </label>
+    <label class="form-label">
+        Mostrar quando o campo pai possuir um destes valores:
+    </label>
 
-                <input type="text" name="dependente_valor" class="form-control"
-                    value="<?= htmlspecialchars($campo['dependente_valor'] ?? '') ?>" placeholder="Ex: Americana">
+    <div
+        id="container_dependente_valores"
+        class="border rounded p-2"
+        style="min-height:80px;">
 
-            </div>
+    </div>
+
+</div>
 
             <button type="submit" class="btn btn-primary">
                 Salvar
@@ -304,6 +335,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </main>
 
     <script>
+        const dependencias =
+         <?= json_encode(
+             $dependenciasJS,
+            JSON_UNESCAPED_UNICODE
+         ); ?>;
+
+        const valoresSelecionados =
+        <?= json_encode(
+            $dependenteValorSelecionado ?? [],
+            JSON_UNESCAPED_UNICODE
+        ); ?>;
 
         const tipoCampo =
             document.getElementById('tipo_campo');
@@ -407,6 +449,54 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             renderizarOpcoes();
         }
 
+        function atualizarValoresDependencia() {
+
+    const idPai =
+        document.querySelector('[name="dependente_de"]').value;
+
+    const container =
+        document.getElementById(
+            'container_dependente_valores'
+        );
+
+    container.innerHTML = '';
+
+    if (!idPai || !dependencias[idPai]) {
+
+        container.innerHTML =
+            '<small class="text-muted">Selecione primeiro o campo pai.</small>';
+
+        return;
+    }
+
+    dependencias[idPai].opcoes.forEach(opcao => {
+
+        const marcado =
+            valoresSelecionados.includes(opcao)
+                ? 'checked'
+                : '';
+
+        container.innerHTML += `
+            <div class="form-check">
+
+                <input
+                    class="form-check-input"
+                    type="checkbox"
+                    name="dependente_valor[]"
+                    value="${opcao}"
+                    ${marcado}>
+
+                <label class="form-check-label">
+
+                    ${opcao}
+
+                </label>
+
+            </div>
+        `;
+    });
+}
+
         document
             .getElementById('novaOpcao')
             .addEventListener('keypress', function (e) {
@@ -427,6 +517,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         );
 
         toggleOpcoes();
+
+        document
+        .querySelector('[name="dependente_de"]')
+        .addEventListener(
+            'change',
+            atualizarValoresDependencia
+        );
+
+        atualizarValoresDependencia();
 
     </script>
 

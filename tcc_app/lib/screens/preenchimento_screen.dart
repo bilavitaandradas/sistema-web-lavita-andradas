@@ -93,7 +93,7 @@ class _PreenchimentoScreenState extends State<PreenchimentoScreen> {
     final dependenteDe = campo['dependente_de'];
     final dependenteValor = campo['dependente_valor'];
 
-    // Campo normal
+    // Campo sem dependência
     if (dependenteDe == null ||
         dependenteValor == null ||
         dependenteValor.toString().isEmpty) {
@@ -114,7 +114,23 @@ class _PreenchimentoScreenState extends State<PreenchimentoScreen> {
       valorAtual = _controllers[idCampoPai]?.text;
     }
 
-    return valorAtual == dependenteValor;
+    if (valorAtual == null) {
+      return false;
+    }
+
+    List<String> valoresPermitidos = [];
+
+    try {
+      // Novo formato (JSON)
+      valoresPermitidos = List<String>.from(
+        jsonDecode(dependenteValor.toString()),
+      );
+    } catch (_) {
+      // Compatibilidade com registros antigos
+      valoresPermitidos = [dependenteValor.toString()];
+    }
+
+    return valoresPermitidos.contains(valorAtual);
   }
 
   void _limparCamposDependentes(int idCampoPai) {

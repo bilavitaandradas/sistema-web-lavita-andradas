@@ -43,9 +43,16 @@ if (isset($_POST['adicionar_campo'])) {
         ? intval($_POST['dependente_de'])
         : null;
 
-    $dependente_valor = !empty($_POST['dependente_valor'])
-        ? trim($_POST['dependente_valor'])
-        : null;
+    $dependente_valor = null;
+
+    if (!empty($_POST['dependente_valor'])) {
+
+        $dependente_valor = json_encode(
+            array_values($_POST['dependente_valor']),
+            JSON_UNESCAPED_UNICODE
+        );
+
+    }
 
     $opcoes = null;
 
@@ -149,11 +156,10 @@ $resultCampos = $stmtCampos->get_result();
 
 // --- BUSCA CAMPOS PARA DEPENDÊNCIA ---
 $stmtDependencias = $conn->prepare("
-    SELECT id_campo, nome_campo
+    SELECT id_campo, nome_campo, opcoes
     FROM campos_questionario
     WHERE id_questionario = ?
     AND tipo_campo = 'DROPDOWN'
-    AND dependente_de IS NULL
     ORDER BY nome_campo ASC
 ");
 
@@ -361,7 +367,7 @@ $camposDependencia = $stmtDependencias->get_result();
                     Depende de qual campo?
                 </label>
 
-                <select name="dependente_de" class="form-select">
+                <select name="dependente_de" id="dependente_de" class="form-select">
 
                     <option value="">
                         Nenhum
@@ -383,27 +389,57 @@ $camposDependencia = $stmtDependencias->get_result();
 
             <div class="mb-3">
 
-                <label class="form-label">
-                    Mostrar quando valor for:
-                </label>
+                <div class="mb-3">
 
-                <input type="text" name="dependente_valor" class="form-control" placeholder="Ex: Colheita">
+                    <label class="form-label">
+                        Mostrar quando o campo pai possuir um destes valores:
+                    </label>
 
-            </div>
+                    <div id="container_dependente_valores" class="border rounded p-2" style="min-height:80px;">
 
-            <button type="submit" name="adicionar_campo" class="btn btn-success">
-                Adicionar Campo
-            </button>
+                        <small class="text-muted">
+                            Selecione primeiro o campo pai.
+                        </small>
 
-            <a href="configuracoes.php" class="btn btn-secondary">
-                Voltar
-            </a>
+                    </div>
+
+                </div>
+
+                <button type="submit" name="adicionar_campo" class="btn btn-success">
+                    Adicionar Campo
+                </button>
+
+                <a href="configuracoes.php" class="btn btn-secondary">
+                    Voltar
+                </a>
 
         </form>
 
     </main>
 
+    <?php
+
+    $dependenciasJS = [];
+
+    $camposDependencia->data_seek(0);
+
+    while ($dep = $camposDependencia->fetch_assoc()) {
+
+        $dependenciasJS[$dep['id_campo']] = [
+            'nome' => $dep['nome_campo'],
+            'opcoes' => json_decode($dep['opcoes'], true) ?? []
+        ];
+    }
+
+    ?>
+
     <script>
+
+        const dependencias = <?= json_encode(
+            $dependenciasJS,
+            JSON_UNESCAPED_UNICODE
+        ); ?>;
+        console.log(dependencias);
 
         const tipoCampo = document.getElementById('tipo_campo');
 
@@ -514,9 +550,75 @@ $camposDependencia = $stmtDependencias->get_result();
                 }
             });
 
-        tipoCampo.addEventListener('change', toggleOpcoes);
+        function atualizarValoresDependencia() {
+
+            const idPai =
+                document.getElementById('dependente_de').value;
+
+            const container =
+                document.getElementById('container_dependente_valores');
+
+            container.innerHTML = '';
+
+            if (!idPai || !dependencias[idPai]) {
+
+                container.innerHTML =
+                    '<small class="text-muted">Selecione primeiro o campo pai.</small>';
+
+                return;
+            }
+
+            const opcoes =
+                dependencias[idPai].opcoes;
+
+            if (!opcoes.length) {
+
+                container.innerHTML =
+                    '<small class="text-muted">Este campo não possui opções.</small>';
+
+                return;
+            }
+
+            opcoes.forEach(opcao => {
+
+                container.innerHTML += `
+            <div class="form-check">
+
+                <input
+                    class="form-check-input"
+                    type="checkbox"
+                    name="dependente_valor[]"
+                    value="${opcao}"
+                    id="dep_${opcao}">
+
+                <label
+                    class="form-check-label"
+                    for="dep_${opcao}">
+
+                    ${opcao}
+
+                </label>
+
+            </div>
+        `;
+            });
+        }
+
+        tipoCampo.addEventListener(
+            'change',
+            toggleOpcoes
+        );
+
+        document
+            .getElementById('dependente_de')
+            .addEventListener(
+                'change',
+                atualizarValoresDependencia
+            );
 
         toggleOpcoes();
+
+        atualizarValoresDependencia();
 
     </script>
 

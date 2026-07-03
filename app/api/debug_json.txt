@@ -1,1 +1,1 @@
-[{"id":3,"id_lancamento":"1_1779106741244","id_questionario":40,"id_usuario":1,"respostas":"{\"185\":\"[\\\"a\\\",\\\"b\\\",\\\"c\\\",\\\"d\\\",\\\"e\\\"]\",\"186\":\"dudu\",\"187\":\"Lindo\"}","criado_em_local":"2026-05-18T09:19:01.244314","sincronizado":0}]
+[{"id":4,"id_lancamento":"1_1782989808321","id_questionario":42,"id_usuario":1,"respostas":"{\"202\":\"Florada\",\"204\":\"\",\"205\":\"\"}","criado_em_local":"2026-07-02T07:56:48.321691","sincronizado":0}]
