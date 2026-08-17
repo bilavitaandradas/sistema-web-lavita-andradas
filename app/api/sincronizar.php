@@ -40,8 +40,6 @@ $stmt_user->close();
 // RECEBE JSON
 // =============================
 $json_data = file_get_contents('php://input');
-// DEBUG TEMPORÁRIO
-file_put_contents('debug_json.txt', $json_data);
 $lancamentos = json_decode($json_data, true);
 
 if (empty($lancamentos) || !is_array($lancamentos)) {

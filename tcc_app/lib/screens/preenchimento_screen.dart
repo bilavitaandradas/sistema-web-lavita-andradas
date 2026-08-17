@@ -25,6 +25,8 @@ class _PreenchimentoScreenState extends State<PreenchimentoScreen> {
 
   List<dynamic> _campos = [];
 
+  List<Map<String, dynamic>> _dependencias = [];
+
   final Map<int, TextEditingController> _controllers = {};
   final Map<int, String?> _dropdownValues = {};
 
@@ -44,12 +46,14 @@ class _PreenchimentoScreenState extends State<PreenchimentoScreen> {
     try {
       final campos = await DatabaseService.instance
           .getCamposDoQuestionarioLocal(widget.idQuestionario);
-      for (final campo in campos) {
-        debugPrint(campo.toString());
-      }
+
+      final dependencias = await DatabaseService.instance
+          .getDependenciasDoQuestionarioLocal(widget.idQuestionario);
+
       if (mounted) {
         setState(() {
           _campos = campos;
+          _dependencias = dependencias;
 
           for (var campo in _campos) {
             final idCampo = campo['id_campo'] as int;
@@ -85,85 +89,183 @@ class _PreenchimentoScreenState extends State<PreenchimentoScreen> {
     super.dispose();
   }
 
-  // =========================================================
-  // CONTROLE DE VISIBILIDADE (CAMPO DEPENDENTE)
-  // =========================================================
+  List<String> _obterValoresAtuaisDoCampo(int idCampo) {
+    // DROPDOWN
+    if (_dropdownValues.containsKey(idCampo)) {
+      final valor = _dropdownValues[idCampo];
+
+      if (valor == null || valor.trim().isEmpty) {
+        return [];
+      }
+
+      return [valor.trim()];
+    }
+
+    // CHECKBOX
+    if (_checkboxValues.containsKey(idCampo)) {
+      return (_checkboxValues[idCampo] ?? [])
+          .map((valor) => valor.trim())
+          .where((valor) => valor.isNotEmpty)
+          .toList();
+    }
+
+    // TEXT, NUMBER, DATE e TIME
+    if (_controllers.containsKey(idCampo)) {
+      final valor = _controllers[idCampo]?.text.trim() ?? '';
+
+      if (valor.isEmpty) {
+        return [];
+      }
+
+      return [valor];
+    }
+
+    return [];
+  }
 
   bool _campoDeveSerExibido(Map<String, dynamic> campo) {
-    final dependenteDe = campo['dependente_de'];
-    final dependenteValor = campo['dependente_valor'];
+    final int idCampoFilho = campo['id_campo'] as int;
 
-    // Campo sem dependência
-    if (dependenteDe == null ||
-        dependenteValor == null ||
-        dependenteValor.toString().isEmpty) {
+    // Busca todas as regras referentes a este campo filho.
+    final dependenciasDoCampo =
+        _dependencias
+            .where(
+              (dependencia) => dependencia['id_campo_filho'] == idCampoFilho,
+            )
+            .toList();
+
+    // Campo sem dependência sempre aparece.
+    if (dependenciasDoCampo.isEmpty) {
       return true;
     }
 
-    final int idCampoPai = dependenteDe as int;
+    // Agrupa as regras pelo campo pai.
+    //
+    // Exemplo:
+    //
+    // Pai 10:
+    // - Lopes 7
+    // - Lopes 8
+    //
+    // Pai 15:
+    // - Colheita
+    // - Plantio
+    final Map<int, List<String>> regrasPorPai = {};
 
-    String? valorAtual;
+    for (final dependencia in dependenciasDoCampo) {
+      final int idCampoPai = dependencia['id_campo_pai'] as int;
 
-    // Verifica dropdown
-    if (_dropdownValues.containsKey(idCampoPai)) {
-      valorAtual = _dropdownValues[idCampoPai];
+      final String valorPermitido = dependencia['valor'].toString().trim();
+
+      regrasPorPai.putIfAbsent(idCampoPai, () => []);
+
+      regrasPorPai[idCampoPai]!.add(valorPermitido);
     }
 
-    // Verifica texto
-    if (_controllers.containsKey(idCampoPai)) {
-      valorAtual = _controllers[idCampoPai]?.text;
-    }
+    // Cada campo pai precisa satisfazer sua regra.
+    // Portanto, entre pais diferentes usamos AND.
+    for (final regra in regrasPorPai.entries) {
+      final int idCampoPai = regra.key;
 
-    if (valorAtual == null) {
-      return false;
-    }
+      final List<String> valoresPermitidos = regra.value;
 
-    List<String> valoresPermitidos = [];
+      final List<String> valoresAtuais = _obterValoresAtuaisDoCampo(idCampoPai);
 
-    try {
-      // Novo formato (JSON)
-      valoresPermitidos = List<String>.from(
-        jsonDecode(dependenteValor.toString()),
+      // Pai ainda não preenchido.
+      if (valoresAtuais.isEmpty) {
+        return false;
+      }
+
+      // Dentro do mesmo pai usamos OR:
+      // basta um dos valores atuais estar entre os permitidos.
+      final bool regraDoPaiAtendida = valoresAtuais.any(
+        (valorAtual) => valoresPermitidos.contains(valorAtual),
       );
-    } catch (_) {
-      // Compatibilidade com registros antigos
-      valoresPermitidos = [dependenteValor.toString()];
+
+      if (!regraDoPaiAtendida) {
+        return false;
+      }
     }
 
-    return valoresPermitidos.contains(valorAtual);
+    // Todos os pais atenderam suas respectivas regras.
+    return true;
   }
 
-  void _limparCamposDependentes(int idCampoPai) {
-    for (final campo in _campos) {
-      if (campo['dependente_de'] != idCampoPai) {
+  void _limparValorDoCampo(int idCampo, String tipoCampo) {
+    switch (tipoCampo) {
+      case 'DROPDOWN':
+        _dropdownValues[idCampo] = null;
+        break;
+
+      case 'CHECKBOX':
+        _checkboxValues[idCampo] = [];
+        break;
+
+      case 'DATE':
+        _controllers[idCampo]?.clear();
+        _pickedDates[idCampo] = null;
+        break;
+
+      case 'TIME':
+        _controllers[idCampo]?.clear();
+        _pickedTimes[idCampo] = null;
+        break;
+
+      case 'TEXT':
+      case 'NUMBER':
+      default:
+        _controllers[idCampo]?.clear();
+        break;
+    }
+  }
+
+  void _limparCamposDependentes(int idCampoPai, [Set<int>? camposVisitados]) {
+    final visitados = camposVisitados ?? <int>{};
+
+    // Evita processamento repetido e possíveis ciclos
+    if (!visitados.add(idCampoPai)) {
+      return;
+    }
+
+    // Descobre quais campos filhos possuem alguma
+    // dependência ligada ao campo pai alterado.
+    final idsCamposFilhos =
+        _dependencias
+            .where((dependencia) => dependencia['id_campo_pai'] == idCampoPai)
+            .map((dependencia) => dependencia['id_campo_filho'] as int)
+            .toSet();
+
+    for (final idCampoFilho in idsCamposFilhos) {
+      Map<String, dynamic>? campoFilho;
+
+      for (final campo in _campos) {
+        if (campo['id_campo'] == idCampoFilho) {
+          campoFilho = Map<String, dynamic>.from(campo);
+          break;
+        }
+      }
+
+      if (campoFilho == null) {
         continue;
       }
 
-      final int idFilho = campo['id_campo'];
-      final String tipo = campo['tipo_campo'];
-
-      switch (tipo) {
-        case 'DROPDOWN':
-          _dropdownValues[idFilho] = null;
-          break;
-
-        case 'CHECKBOX':
-          _checkboxValues[idFilho] = [];
-          break;
-
-        case 'DATE':
-        case 'TIME':
-        case 'TEXT':
-        case 'NUMBER':
-        default:
-          _controllers[idFilho]?.clear();
-          _pickedDates[idFilho] = null;
-          _pickedTimes[idFilho] = null;
-          break;
+      // Depois que o pai mudou, verificamos novamente
+      // TODAS as dependências do filho.
+      //
+      // Se ele ainda puder ser exibido, mantemos seu valor.
+      if (_campoDeveSerExibido(campoFilho)) {
+        continue;
       }
 
-      // Limpa dependências em cascata
-      _limparCamposDependentes(idFilho);
+      final String tipoCampo = campoFilho['tipo_campo'].toString();
+
+      // O filho deixou de ser válido.
+      // Portanto, limpamos qualquer resposta que ele possuía.
+      _limparValorDoCampo(idCampoFilho, tipoCampo);
+
+      // Como o filho foi limpo, outros campos que
+      // dependem dele também precisam ser reavaliados.
+      _limparCamposDependentes(idCampoFilho, visitados);
     }
   }
 
@@ -254,8 +356,9 @@ class _PreenchimentoScreenState extends State<PreenchimentoScreen> {
           border: const OutlineInputBorder(),
         ),
         onChanged: (_) {
-          // Atualiza campos dependentes
-          setState(() {});
+          setState(() {
+            _limparCamposDependentes(idCampo);
+          });
         },
         keyboardType:
             isNumber
@@ -297,6 +400,8 @@ class _PreenchimentoScreenState extends State<PreenchimentoScreen> {
               _controllers[idCampo]!.text = DateFormat(
                 'dd/MM/yyyy',
               ).format(pickedDate);
+
+              _limparCamposDependentes(idCampo);
             });
           }
         },
@@ -340,6 +445,8 @@ class _PreenchimentoScreenState extends State<PreenchimentoScreen> {
               final minute = pickedTime.minute.toString().padLeft(2, '0');
 
               _controllers[idCampo]!.text = '$hour:$minute';
+
+              _limparCamposDependentes(idCampo);
             });
           }
         },
@@ -449,7 +556,11 @@ class _PreenchimentoScreenState extends State<PreenchimentoScreen> {
                           child: ElevatedButton(
                             onPressed: () {
                               setState(() {
-                                _checkboxValues[idCampo] = selecionadosTemp;
+                                _checkboxValues[idCampo] = List<String>.from(
+                                  selecionadosTemp,
+                                );
+
+                                _limparCamposDependentes(idCampo);
                               });
 
                               Navigator.pop(context);
@@ -528,6 +639,11 @@ class _PreenchimentoScreenState extends State<PreenchimentoScreen> {
       final respostasMap = <String, dynamic>{};
 
       for (var campo in _campos) {
+        // Não salva campos que estão ocultos pelas regras de dependência
+        if (!_campoDeveSerExibido(campo)) {
+          continue;
+        }
+
         final idCampo = campo['id_campo'] as int;
 
         final tipoCampo = campo['tipo_campo'];

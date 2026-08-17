@@ -6,4 +6,4 @@
 app/update/
 
 # Arquivos temporários
-app/api/debug_json.txt
+/app/api/debug_json.txt

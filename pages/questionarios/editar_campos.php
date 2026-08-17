@@ -39,20 +39,7 @@ if (isset($_POST['adicionar_campo'])) {
     $nome_campo = trim($_POST['nome_campo']);
     $tipo_campo = $_POST['tipo_campo'];
 
-    $dependente_de = !empty($_POST['dependente_de'])
-        ? intval($_POST['dependente_de'])
-        : null;
 
-    $dependente_valor = null;
-
-    if (!empty($_POST['dependente_valor'])) {
-
-        $dependente_valor = json_encode(
-            array_values($_POST['dependente_valor']),
-            JSON_UNESCAPED_UNICODE
-        );
-
-    }
 
     $opcoes = null;
 
@@ -86,24 +73,69 @@ if (isset($_POST['adicionar_campo'])) {
                 nome_campo,
                 tipo_campo,
                 opcoes,
-                dependente_de,
-                dependente_valor,
                 criado_em
             )
-            VALUES (?, ?, ?, ?, ?, ?, NOW())
+            VALUES (?, ?, ?, ?, NOW())
         ");
 
         $stmt->bind_param(
-            "isssis",
+            "isss",
             $id_questionario,
             $nome_campo,
             $tipo_campo,
-            $opcoes,
-            $dependente_de,
-            $dependente_valor
+            $opcoes
         );
 
         if ($stmt->execute()) {
+
+            $idCampoFilho = $stmt->insert_id;
+
+            if (!empty($_POST['dependencias'])) {
+
+                $stmtDep = $conn->prepare("
+        INSERT INTO dependencias_campos
+        (
+            id_campo_filho,
+            id_campo_pai,
+            valor
+        )
+        VALUES (?, ?, ?)
+    ");
+
+                foreach ($_POST['dependencias'] as $dependencia) {
+
+                    if (
+                        empty($dependencia['campo_pai']) ||
+                        empty($dependencia['valores'])
+                    ) {
+                        continue;
+                    }
+
+                    $idCampoPai = intval(
+                        $dependencia['campo_pai']
+                    );
+
+                    foreach ($dependencia['valores'] as $valor) {
+
+                        $valor = trim($valor);
+
+                        if ($valor === '') {
+                            continue;
+                        }
+
+                        $stmtDep->bind_param(
+                            "iis",
+                            $idCampoFilho,
+                            $idCampoPai,
+                            $valor
+                        );
+
+                        $stmtDep->execute();
+                    }
+                }
+
+                $stmtDep->close();
+            }
 
             $mensagem = "
                 <div class='alert alert-success'>
@@ -139,14 +171,34 @@ if (isset($_POST['excluir_campo'])) {
 
 // --- LISTA OS CAMPOS ATUAIS ---
 $stmtCampos = $conn->prepare("
-    SELECT 
-        c.*,
-        cd.nome_campo AS nome_dependencia
-    FROM campos_questionario c
-    LEFT JOIN campos_questionario cd
-        ON c.dependente_de = cd.id_campo
-    WHERE c.id_questionario = ?
-    ORDER BY c.id_campo ASC
+SELECT
+    c.*,
+
+    GROUP_CONCAT(
+        DISTINCT cp.nome_campo
+        ORDER BY cp.nome_campo
+        SEPARATOR ', '
+    ) AS nome_dependencia,
+
+    GROUP_CONCAT(
+        DISTINCT dc.valor
+        ORDER BY dc.valor
+        SEPARATOR ', '
+    ) AS valores_dependencia
+
+FROM campos_questionario c
+
+LEFT JOIN dependencias_campos dc
+    ON dc.id_campo_filho = c.id_campo
+
+LEFT JOIN campos_questionario cp
+    ON cp.id_campo = dc.id_campo_pai
+
+WHERE c.id_questionario = ?
+
+GROUP BY c.id_campo
+
+ORDER BY c.id_campo ASC
 ");
 
 $stmtCampos->bind_param("i", $id_questionario);
@@ -257,14 +309,15 @@ $camposDependencia = $stmtDependencias->get_result();
 
                         <td>
 
-                            <?php if (!empty($campo['dependente_de'])): ?>
+                            <?php if (!empty($campo['nome_dependencia'])): ?>
 
-                                Campo: <?= htmlspecialchars($campo['nome_dependencia']) ?>
+                                <strong>Campo:</strong>
+                                <?= htmlspecialchars($campo['nome_dependencia']) ?>
 
                                 <br>
 
-                                Valor:
-                                <?= htmlspecialchars($campo['dependente_valor']) ?>
+                                <strong>Valores:</strong>
+                                <?= htmlspecialchars($campo['valores_dependencia']) ?>
 
                             <?php else: ?>
 
@@ -359,60 +412,42 @@ $camposDependencia = $stmtDependencias->get_result();
 
             <hr>
 
-            <h5>Dependência (Opcional)</h5>
+            <h5>Dependências (Opcional)</h5>
 
-            <div class="mb-3">
+            <p class="text-muted">
+                Um campo pode depender de vários campos.
+                Para cada campo pai, selecione os valores que permitem a exibição deste campo.
+            </p>
 
-                <label class="form-label">
-                    Depende de qual campo?
-                </label>
+            <div id="listaDependencias">
 
-                <select name="dependente_de" id="dependente_de" class="form-select">
-
-                    <option value="">
-                        Nenhum
-                    </option>
-
-                    <?php while ($dep = $camposDependencia->fetch_assoc()): ?>
-
-                        <option value="<?= $dep['id_campo'] ?>">
-
-                            <?= htmlspecialchars($dep['nome_campo']) ?>
-
-                        </option>
-
-                    <?php endwhile; ?>
-
-                </select>
+                <!--
+        Os blocos de dependência serão criados
+        dinamicamente pelo JavaScript.
+    -->
 
             </div>
 
-            <div class="mb-3">
+            <button type="button" id="btnAdicionarDependencia" class="btn btn-outline-primary mb-3">
 
-                <div class="mb-3">
+                <i class="bi bi-plus-circle"></i>
+                Adicionar Dependência
 
-                    <label class="form-label">
-                        Mostrar quando o campo pai possuir um destes valores:
-                    </label>
+            </button>
 
-                    <div id="container_dependente_valores" class="border rounded p-2" style="min-height:80px;">
+            <hr>
 
-                        <small class="text-muted">
-                            Selecione primeiro o campo pai.
-                        </small>
+            <button type="submit" name="adicionar_campo" class="btn btn-success">
 
-                    </div>
+                Adicionar Campo
 
-                </div>
+            </button>
 
-                <button type="submit" name="adicionar_campo" class="btn btn-success">
-                    Adicionar Campo
-                </button>
+            <a href="configuracoes.php" class="btn btn-secondary">
 
-                <a href="configuracoes.php" class="btn btn-secondary">
-                    Voltar
-                </a>
+                Voltar
 
+            </a>
         </form>
 
     </main>
@@ -550,50 +585,141 @@ $camposDependencia = $stmtDependencias->get_result();
                 }
             });
 
-        function atualizarValoresDependencia() {
-
-            const idPai =
-                document.getElementById('dependente_de').value;
+        function criarBlocoDependencia() {
 
             const container =
-                document.getElementById('container_dependente_valores');
+                document.getElementById('listaDependencias');
 
-            container.innerHTML = '';
+            const bloco =
+                document.createElement('div');
+
+            const indice =
+                document.querySelectorAll('.dependencia-item').length;
+            bloco.dataset.indice = indice;
+
+            bloco.className =
+                'card p-3 mb-3 dependencia-item';
+
+            bloco.innerHTML = `
+        <div class="mb-3">
+
+            <label class="form-label">
+                Campo Pai
+            </label>
+
+            <select
+                class="form-select dependencia-pai"
+                name="dependencias[${indice}][campo_pai]"
+                required>
+
+                <option value="">
+                    Selecione...
+                </option>
+
+                ${Object.entries(dependencias)
+                    .map(([id, campo]) => `
+                        <option value="${id}">
+                            ${campo.nome}
+                        </option>
+                    `)
+                    .join('')}
+
+            </select>
+
+        </div>
+
+        <div
+            class="dependencia-valores border rounded p-2 mb-3"
+            style="min-height:80px;">
+
+            <small class="text-muted">
+                Selecione primeiro o campo pai.
+            </small>
+
+        </div>
+
+        <button
+            type="button"
+            class="btn btn-danger btn-sm remover-dependencia">
+
+            <i class="bi bi-trash"></i>
+            Remover
+
+        </button>
+    `;
+
+            container.appendChild(bloco);
+
+            // Pega o select deste bloco recém-criado
+            const selectPai =
+                bloco.querySelector('.dependencia-pai');
+
+            // Quando o campo pai mudar,
+            // atualiza os valores disponíveis
+            selectPai.addEventListener(
+                'change',
+                function () {
+
+                    atualizarValoresDependencia(
+                        bloco,
+                        this.value
+                    );
+
+                }
+            );
+        }
+
+        function atualizarValoresDependencia(bloco, idPai) {
+
+            const containerValores =
+                bloco.querySelector('.dependencia-valores');
+
+            containerValores.innerHTML = '';
 
             if (!idPai || !dependencias[idPai]) {
 
-                container.innerHTML =
-                    '<small class="text-muted">Selecione primeiro o campo pai.</small>';
+                containerValores.innerHTML = `
+            <small class="text-muted">
+                Selecione primeiro o campo pai.
+            </small>
+        `;
 
                 return;
             }
 
             const opcoes =
-                dependencias[idPai].opcoes;
+                dependencias[idPai].opcoes || [];
 
             if (!opcoes.length) {
 
-                container.innerHTML =
-                    '<small class="text-muted">Este campo não possui opções.</small>';
+                containerValores.innerHTML = `
+            <small class="text-muted">
+                Este campo não possui opções cadastradas.
+            </small>
+        `;
 
                 return;
             }
+            const indice =
+                bloco.dataset.indice;
+            opcoes.forEach((opcao, index) => {
 
-            opcoes.forEach(opcao => {
+                const idCheckbox =
+                    `dependencia_${Date.now()}_${index}`;
 
-                container.innerHTML += `
+                containerValores.innerHTML += `
             <div class="form-check">
 
                 <input
                     class="form-check-input"
                     type="checkbox"
-                    name="dependente_valor[]"
+                    name="dependencias[${indice}][valores][]"
                     value="${opcao}"
-                    id="dep_${opcao}">
+                    id="${idCheckbox}">
 
                 <label
                     class="form-check-label"
-                    for="dep_${opcao}">
+                    for="${idCheckbox}">
 
                     ${opcao}
 
@@ -601,6 +727,7 @@ $camposDependencia = $stmtDependencias->get_result();
 
             </div>
         `;
+
             });
         }
 
@@ -610,15 +737,26 @@ $camposDependencia = $stmtDependencias->get_result();
         );
 
         document
-            .getElementById('dependente_de')
+            .getElementById('btnAdicionarDependencia')
             .addEventListener(
-                'change',
-                atualizarValoresDependencia
+                'click',
+                criarBlocoDependencia
             );
 
-        toggleOpcoes();
+        document.addEventListener('click', function (e) {
 
-        atualizarValoresDependencia();
+            if (
+                !e.target.classList.contains(
+                    'remover-dependencia'
+                )
+            ) {
+                return;
+            }
+
+            e.target
+                .closest('.dependencia-item')
+                .remove();
+        });
 
     </script>
 

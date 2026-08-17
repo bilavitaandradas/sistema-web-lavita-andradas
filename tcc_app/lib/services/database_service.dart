@@ -17,10 +17,10 @@ class DatabaseService {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, filePath);
 
-    // Versão 3, para criar as novas tabelas de cache
+    // Versão 5, adiciona suporte à tabela de dependências dos campos
     return await openDatabase(
       path,
-      version: 4,
+      version: 5,
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
@@ -42,6 +42,20 @@ class DatabaseService {
         'ALTER TABLE campos_questionario '
         'ADD COLUMN dependente_valor TEXT',
       );
+    }
+
+    if (oldVersion < 5) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS dependencias_campos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id_campo_filho INTEGER NOT NULL,
+        id_campo_pai INTEGER NOT NULL,
+        valor TEXT NOT NULL,
+        FOREIGN KEY (id_campo_filho)
+        REFERENCES campos_questionario (id_campo)
+        ON DELETE CASCADE
+    )
+  ''');
     }
 
     await _createTables(db);
@@ -80,6 +94,18 @@ class DatabaseService {
         FOREIGN KEY (id_questionario) REFERENCES questionarios (id_questionario) ON DELETE CASCADE
       )
     ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS dependencias_campos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id_campo_filho INTEGER NOT NULL,
+        id_campo_pai INTEGER NOT NULL,
+        valor TEXT NOT NULL,
+        FOREIGN KEY (id_campo_filho)
+        REFERENCES campos_questionario (id_campo)
+        ON DELETE CASCADE
+  )
+''');
     debugPrint(
       'DB_SERVICE: Tabelas (lancamentos_offline, questionarios, campos_questionario) verificadas/criadas.',
     );
@@ -90,9 +116,11 @@ class DatabaseService {
     final db = await instance.database;
     final questionarios = data['questionarios'] as List;
     final campos = data['campos'] as List;
+    final dependencias = data['dependencias'] as List? ?? [];
 
     await db.transaction((txn) async {
       final batch = txn.batch();
+      batch.delete('dependencias_campos');
       batch.delete('campos_questionario');
       batch.delete('questionarios');
 
@@ -110,9 +138,18 @@ class DatabaseService {
           conflictAlgorithm: ConflictAlgorithm.replace,
         );
       }
+      for (var dependencia in dependencias) {
+        batch.insert(
+          'dependencias_campos',
+          dependencia as Map<String, dynamic>,
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
       await batch.commit(noResult: true);
     });
-    debugPrint('DB_SERVICE: Cache de questionários e campos atualizado.');
+    debugPrint(
+      'DB_SERVICE: Cache de questionários, campos e dependências atualizado.',
+    );
   }
 
   // --- MÉTODOS DE LEITURA DO CACHE LOCAL ---
@@ -130,6 +167,43 @@ class DatabaseService {
       where: 'id_questionario = ?',
       whereArgs: [idQuestionario],
       orderBy: 'id_campo ASC',
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> getDependenciasDoCampoLocal(
+    int idCampoFilho,
+  ) async {
+    final db = await instance.database;
+
+    return await db.query(
+      'dependencias_campos',
+      where: 'id_campo_filho = ?',
+      whereArgs: [idCampoFilho],
+      orderBy: 'id_campo_pai ASC, valor ASC',
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> getDependenciasDoQuestionarioLocal(
+    int idQuestionario,
+  ) async {
+    final db = await instance.database;
+
+    return await db.rawQuery(
+      '''
+    SELECT
+      dc.id_campo_filho,
+      dc.id_campo_pai,
+      dc.valor
+    FROM dependencias_campos dc
+    INNER JOIN campos_questionario c
+      ON c.id_campo = dc.id_campo_filho
+    WHERE c.id_questionario = ?
+    ORDER BY
+      dc.id_campo_filho ASC,
+      dc.id_campo_pai ASC,
+      dc.valor ASC
+    ''',
+      [idQuestionario],
     );
   }
 

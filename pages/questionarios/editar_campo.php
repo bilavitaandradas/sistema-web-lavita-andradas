@@ -77,6 +77,36 @@ while ($dep = $camposDependencia->fetch_assoc()) {
 
 $camposDependencia->data_seek(0);
 
+
+// Busca todas as dependências já cadastradas para este campo
+$stmtDeps = $conn->prepare("
+    SELECT
+        id_campo_pai,
+        valor
+    FROM dependencias_campos
+    WHERE id_campo_filho = ?
+");
+
+$stmtDeps->bind_param("i", $id_campo);
+$stmtDeps->execute();
+
+$resultDeps = $stmtDeps->get_result();
+
+$dependenciasSelecionadas = [];
+
+while ($dep = $resultDeps->fetch_assoc()) {
+
+    $idPai = (int) $dep['id_campo_pai'];
+
+    if (!isset($dependenciasSelecionadas[$idPai])) {
+        $dependenciasSelecionadas[$idPai] = [];
+    }
+
+    $dependenciasSelecionadas[$idPai][] = $dep['valor'];
+}
+
+$stmtDeps->close();
+
 // Se o formulário foi submetido
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
@@ -85,22 +115,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $tipo_campo = $_POST['tipo_campo'];
 
     $opcoes = null;
-
-    $dependente_de = !empty($_POST['dependente_de'])
-        ? intval($_POST['dependente_de'])
-        : null;
-
-    if (!empty($_POST['dependente_valor'])) {
-
-    $dependente_valor = json_encode(
-        array_values($_POST['dependente_valor']),
-        JSON_UNESCAPED_UNICODE
-    );
-
-} else {
-
-    $dependente_valor = null;
-}
 
     if (
         in_array($tipo_campo, ['DROPDOWN', 'CHECKBOX']) &&
@@ -129,43 +143,94 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             nome_campo = ?,
             tipo_campo = ?,
             opcoes = ?,
-            dependente_de = ?,
-            dependente_valor = ?,
             atualizado_em = NOW()
         WHERE id_campo = ?
     ");
 
     $stmt->bind_param(
-        "sssisi",
+        "sssi",
         $nome_campo,
         $tipo_campo,
         $opcoes,
-        $dependente_de,
-        $dependente_valor,
         $id_campo
     );
 
     if ($stmt->execute()) {
 
+        // Remove todas as dependências antigas
+        $stmtDel = $conn->prepare("
+        DELETE FROM dependencias_campos
+        WHERE id_campo_filho = ?
+    ");
+
+        $stmtDel->bind_param(
+            "i",
+            $id_campo
+        );
+
+        $stmtDel->execute();
+        $stmtDel->close();
+
+
+        // Salva as novas dependências
+        if (!empty($_POST['dependencias']) && is_array($_POST['dependencias'])) {
+
+            $stmtDep = $conn->prepare("
+            INSERT INTO dependencias_campos
+            (
+                id_campo_filho,
+                id_campo_pai,
+                valor
+            )
+            VALUES (?, ?, ?)
+        ");
+
+            foreach ($_POST['dependencias'] as $dependencia) {
+
+                if (
+                    empty($dependencia['campo_pai']) ||
+                    empty($dependencia['valores']) ||
+                    !is_array($dependencia['valores'])
+                ) {
+                    continue;
+                }
+
+                $idCampoPai = (int) $dependencia['campo_pai'];
+
+                foreach ($dependencia['valores'] as $valor) {
+
+                    $valor = trim($valor);
+
+                    if ($valor === '') {
+                        continue;
+                    }
+
+                    $stmtDep->bind_param(
+                        "iis",
+                        $id_campo,
+                        $idCampoPai,
+                        $valor
+                    );
+
+                    $stmtDep->execute();
+                }
+            }
+
+            $stmtDep->close();
+        }
+
+
         $mensagem = "
-            <div class='alert alert-success'>
-                Campo atualizado com sucesso.
-            </div>
-        ";
+        <div class='alert alert-success'>
+            Campo atualizado com sucesso.
+        </div>
+    ";
 
         // Atualiza os dados para exibir na tela novamente
         $campo['nome_campo'] = $nome_campo;
         $campo['tipo_campo'] = $tipo_campo;
         $campo['opcoes'] = $opcoes;
-        $campo['dependente_de'] = $dependente_de;
-        $campo['dependente_valor'] = $dependente_valor;
 
-        $dependenteValorSelecionado =
-    json_decode($campo['dependente_valor'], true);
-
-if (!is_array($dependenteValorSelecionado)) {
-    $dependenteValorSelecionado = [];
-}
     } else {
 
         $mensagem = "
@@ -278,50 +343,22 @@ if (!is_array($dependenteValorSelecionado)) {
 
             <hr>
 
-            <h5>Dependência (Opcional)</h5>
+            <h5>Dependências (Opcional)</h5>
 
-            <div class="mb-3">
-
-                <label class="form-label">
-                    Depende de qual campo?
-                </label>
-
-                <select name="dependente_de" class="form-select">
-
-                    <option value="">
-                        Nenhum
-                    </option>
-
-                    <?php while ($dep = $camposDependencia->fetch_assoc()): ?>
-
-                        <option value="<?= $dep['id_campo'] ?>" <?= $campo['dependente_de'] == $dep['id_campo'] ? 'selected' : '' ?>
-                            >
-
-                            <?= htmlspecialchars($dep['nome_campo']) ?>
-
-                        </option>
-
-                    <?php endwhile; ?>
-
-                </select>
+            <div id="listaDependencias">
 
             </div>
 
-            <div class="mb-3">
+            <div class="mt-3">
 
-    <label class="form-label">
-        Mostrar quando o campo pai possuir um destes valores:
-    </label>
+                <button type="button" class="btn btn-outline-primary" id="btnAdicionarDependencia">
 
-    <div
-        id="container_dependente_valores"
-        class="border rounded p-2"
-        style="min-height:80px;">
+                    <i class="bi bi-plus-circle"></i>
+                    Adicionar Dependência
 
-    </div>
+                </button>
 
-</div>
-
+            </div>
             <button type="submit" class="btn btn-primary">
                 Salvar
             </button>
@@ -335,23 +372,45 @@ if (!is_array($dependenteValorSelecionado)) {
     </main>
 
     <script>
-        const dependencias =
-         <?= json_encode(
-             $dependenciasJS,
-            JSON_UNESCAPED_UNICODE
-         ); ?>;
 
-        const valoresSelecionados =
-        <?= json_encode(
-            $dependenteValorSelecionado ?? [],
-            JSON_UNESCAPED_UNICODE
-        ); ?>;
+        // =============================
+        // DADOS VINDOS DO PHP
+        // =============================
+
+        const dependencias =
+            <?= json_encode(
+                $dependenciasJS,
+                JSON_UNESCAPED_UNICODE
+            ); ?>;
+
+        const dependenciasSelecionadas =
+            <?= json_encode(
+                $dependenciasSelecionadas,
+                JSON_UNESCAPED_UNICODE
+            ); ?>;
+
+
+        // =============================
+        // ELEMENTOS DA PÁGINA
+        // =============================
 
         const tipoCampo =
             document.getElementById('tipo_campo');
 
         const containerOpcoes =
             document.getElementById('container_opcoes');
+
+
+        // =============================
+        // CONTROLE DOS ÍNDICES
+        // =============================
+
+        let indiceDependencia = 0;
+
+
+        // =============================
+        // CONTROLE DAS OPÇÕES DO CAMPO
+        // =============================
 
         function toggleOpcoes() {
 
@@ -363,169 +422,501 @@ if (!is_array($dependenteValorSelecionado)) {
                 mostrar ? 'block' : 'none';
         }
 
+
         let opcoes = <?= json_encode(
             json_decode($campo['opcoes'] ?? '[]', true) ?: [],
             JSON_UNESCAPED_UNICODE
         ); ?>;
 
-        function renderizarOpcoes() {
 
-            opcoes.sort((a, b) =>
-                a.localeCompare(
-                    b,
-                    'pt-BR',
-                    { sensitivity: 'base' }
-                )
-            );
+        // =============================
+        // CRIA BLOCO DE DEPENDÊNCIA
+        // =============================
+
+        function criarBlocoDependencia(
+            idPaiSelecionado = '',
+            valoresSelecionados = []
+        ) {
+
+            const container =
+                document.getElementById('listaDependencias');
+
+
+            // Cada bloco recebe um índice próprio
+            const indice =
+                indiceDependencia++;
+
+
+            const bloco =
+                document.createElement('div');
+
+            bloco.className =
+                'card p-3 mb-3 dependencia-item';
+
+            bloco.dataset.indice =
+                indice;
+
 
             let html = '';
 
-            opcoes.forEach((opcao, index) => {
+
+            // =============================
+            // CAMPO PAI
+            // =============================
+
+            html += `
+            <div class="mb-3">
+
+                <label class="form-label">
+                    Campo Pai
+                </label>
+
+                <select
+                    class="form-select dependencia-pai"
+                    name="dependencias[${indice}][campo_pai]"
+                    required>
+
+                    <option value="">
+                        Selecione...
+                    </option>
+        `;
+
+
+            for (const id in dependencias) {
+
+                const selecionado =
+                    String(id) === String(idPaiSelecionado)
+                        ? 'selected'
+                        : '';
+
 
                 html += `
-            <div class="d-flex justify-content-between align-items-center border-bottom py-1">
+                <option
+                    value="${id}"
+                    ${selecionado}>
+                    ${dependencias[id].nome}
+                </option>
+            `;
+            }
 
-                <span>${opcao}</span>
 
-                <div>
-
-                    <input
-                        type="hidden"
-                        name="opcoes_lista[]"
-                        value="${opcao}"
-                    >
-
-                    <button
-                        type="button"
-                        class="btn btn-sm btn-danger"
-                        onclick="removerOpcao(${index})"
-                    >
-                        <i class="bi bi-trash"></i>
-                    </button>
-
-                </div>
+            html += `
+                </select>
 
             </div>
-        `;
-            });
 
-            document.getElementById('listaOpcoes').innerHTML = html;
+
+            <div
+                class="dependencia-valores border rounded p-2 mb-3"
+                style="min-height: 80px;">
+
+                <small class="text-muted">
+                    Selecione um campo pai.
+                </small>
+
+            </div>
+
+
+            <button
+                type="button"
+                class="btn btn-danger btn-sm remover-dependencia">
+
+                <i class="bi bi-trash"></i>
+                Remover
+
+            </button>
+        `;
+
+
+            bloco.innerHTML =
+                html;
+
+
+            container.appendChild(
+                bloco
+            );
+
+
+            // =============================
+            // EVENTO DO CAMPO PAI
+            // =============================
+
+            const selectPai =
+                bloco.querySelector(
+                    '.dependencia-pai'
+                );
+
+
+            selectPai.addEventListener(
+                'change',
+                function () {
+
+                    atualizarValoresDependencia(
+                        bloco,
+                        this.value
+                    );
+
+                }
+            );
+
+
+            // =============================
+            // CARREGA VALORES EXISTENTES
+            // =============================
+
+            if (idPaiSelecionado) {
+
+                atualizarValoresDependencia(
+                    bloco,
+                    idPaiSelecionado,
+                    valoresSelecionados
+                );
+            }
         }
+
+
+        // =============================
+        // ATUALIZA VALORES DO CAMPO PAI
+        // =============================
+
+        function atualizarValoresDependencia(
+            bloco,
+            idPai,
+            valoresSelecionados = []
+        ) {
+
+            const containerValores =
+                bloco.querySelector(
+                    '.dependencia-valores'
+                );
+
+
+            const indice =
+                bloco.dataset.indice;
+
+
+            containerValores.innerHTML =
+                '';
+
+
+            // =============================
+            // VALIDA CAMPO PAI
+            // =============================
+
+            if (
+                !idPai ||
+                !dependencias[idPai]
+            ) {
+
+                containerValores.innerHTML = `
+                <small class="text-muted">
+                    Selecione um campo pai.
+                </small>
+            `;
+
+                return;
+            }
+
+
+            // =============================
+            // BUSCA OPÇÕES DO CAMPO PAI
+            // =============================
+
+            const opcoesPai =
+                dependencias[idPai].opcoes || [];
+
+
+            if (!opcoesPai.length) {
+
+                containerValores.innerHTML = `
+                <small class="text-muted">
+                    Este campo não possui opções cadastradas.
+                </small>
+            `;
+
+                return;
+            }
+
+
+            // =============================
+            // CRIA CHECKBOXES
+            // =============================
+
+            opcoesPai.forEach(
+                (opcao, index) => {
+
+                    const idCheckbox =
+                        `dependencia_${indice}_${index}`;
+
+
+                    const marcado =
+                        valoresSelecionados
+                            .map(String)
+                            .includes(String(opcao))
+                            ? 'checked'
+                            : '';
+
+
+                    containerValores.innerHTML += `
+                    <div class="form-check">
+
+                        <input
+                            class="form-check-input"
+                            type="checkbox"
+                            name="dependencias[${indice}][valores][]"
+                            value="${opcao}"
+                            id="${idCheckbox}"
+                            ${marcado}>
+
+                        <label
+                            class="form-check-label"
+                            for="${idCheckbox}">
+
+                            ${opcao}
+
+                        </label>
+
+                    </div>
+                `;
+                }
+            );
+        }
+
+
+        // =============================
+        // RENDERIZA OPÇÕES DO CAMPO
+        // =============================
+
+        function renderizarOpcoes() {
+
+            opcoes.sort(
+                (a, b) =>
+                    a.localeCompare(
+                        b,
+                        'pt-BR',
+                        {
+                            sensitivity: 'base'
+                        }
+                    )
+            );
+
+
+            let html = '';
+
+
+            opcoes.forEach(
+                (opcao, index) => {
+
+                    html += `
+                    <div
+                        class="d-flex justify-content-between align-items-center border-bottom py-1">
+
+                        <span>
+                            ${opcao}
+                        </span>
+
+                        <div>
+
+                            <input
+                                type="hidden"
+                                name="opcoes_lista[]"
+                                value="${opcao}">
+
+                            <button
+                                type="button"
+                                class="btn btn-sm btn-danger"
+                                onclick="removerOpcao(${index})">
+
+                                <i class="bi bi-trash"></i>
+
+                            </button>
+
+                        </div>
+
+                    </div>
+                `;
+                }
+            );
+
+
+            document
+                .getElementById('listaOpcoes')
+                .innerHTML = html;
+        }
+
+
+        // =============================
+        // ADICIONAR OPÇÃO
+        // =============================
 
         function adicionarOpcao() {
 
             const campo =
-                document.getElementById('novaOpcao');
+                document.getElementById(
+                    'novaOpcao'
+                );
+
 
             const valor =
                 campo.value.trim();
+
 
             if (!valor) {
                 return;
             }
 
-            const existe = opcoes.some(
-                o => o.toLowerCase() === valor.toLowerCase()
-            );
+
+            const existe =
+                opcoes.some(
+                    o =>
+                        o.toLowerCase() ===
+                        valor.toLowerCase()
+                );
+
 
             if (existe) {
 
-                alert('Esta opção já foi adicionada.');
+                alert(
+                    'Esta opção já foi adicionada.'
+                );
 
                 return;
             }
 
-            opcoes.push(valor);
 
-            campo.value = '';
+            opcoes.push(
+                valor
+            );
+
+
+            campo.value =
+                '';
+
 
             renderizarOpcoes();
         }
+
+
+        // =============================
+        // REMOVER OPÇÃO
+        // =============================
 
         function removerOpcao(index) {
 
-            opcoes.splice(index, 1);
+            opcoes.splice(
+                index,
+                1
+            );
+
 
             renderizarOpcoes();
         }
 
-        function atualizarValoresDependencia() {
 
-    const idPai =
-        document.querySelector('[name="dependente_de"]').value;
-
-    const container =
-        document.getElementById(
-            'container_dependente_valores'
-        );
-
-    container.innerHTML = '';
-
-    if (!idPai || !dependencias[idPai]) {
-
-        container.innerHTML =
-            '<small class="text-muted">Selecione primeiro o campo pai.</small>';
-
-        return;
-    }
-
-    dependencias[idPai].opcoes.forEach(opcao => {
-
-        const marcado =
-            valoresSelecionados.includes(opcao)
-                ? 'checked'
-                : '';
-
-        container.innerHTML += `
-            <div class="form-check">
-
-                <input
-                    class="form-check-input"
-                    type="checkbox"
-                    name="dependente_valor[]"
-                    value="${opcao}"
-                    ${marcado}>
-
-                <label class="form-check-label">
-
-                    ${opcao}
-
-                </label>
-
-            </div>
-        `;
-    });
-}
+        // =============================
+        // ENTER NO CAMPO DE OPÇÃO
+        // =============================
 
         document
             .getElementById('novaOpcao')
-            .addEventListener('keypress', function (e) {
+            .addEventListener(
+                'keypress',
+                function (e) {
 
-                if (e.key === 'Enter') {
+                    if (e.key === 'Enter') {
 
-                    e.preventDefault();
+                        e.preventDefault();
 
-                    adicionarOpcao();
+                        adicionarOpcao();
+                    }
                 }
-            });
+            );
+
+
+        // =============================
+        // INICIALIZA OPÇÕES
+        // =============================
 
         renderizarOpcoes();
+
+
+        // =============================
+        // ALTERAÇÃO DO TIPO DO CAMPO
+        // =============================
 
         tipoCampo.addEventListener(
             'change',
             toggleOpcoes
         );
 
+
         toggleOpcoes();
 
-        document
-        .querySelector('[name="dependente_de"]')
-        .addEventListener(
-            'change',
-            atualizarValoresDependencia
-        );
 
-        atualizarValoresDependencia();
+        // =============================
+        // BOTÃO ADICIONAR DEPENDÊNCIA
+        // =============================
+
+        document
+            .getElementById(
+                'btnAdicionarDependencia'
+            )
+            .addEventListener(
+                'click',
+                function () {
+
+                    criarBlocoDependencia();
+
+                }
+            );
+
+
+        // =============================
+        // CARREGA DEPENDÊNCIAS EXISTENTES
+        // =============================
+
+        for (
+            const idPai in dependenciasSelecionadas
+        ) {
+
+            criarBlocoDependencia(
+                idPai,
+                dependenciasSelecionadas[idPai]
+            );
+        }
+
+
+        // =============================
+        // REMOVER BLOCO DE DEPENDÊNCIA
+        // =============================
+
+        document.addEventListener(
+            'click',
+            function (e) {
+
+                const botao =
+                    e.target.closest(
+                        '.remover-dependencia'
+                    );
+
+
+                if (!botao) {
+                    return;
+                }
+
+
+                const bloco =
+                    botao.closest(
+                        '.dependencia-item'
+                    );
+
+
+                if (bloco) {
+                    bloco.remove();
+                }
+
+            }
+        );
 
     </script>
 
