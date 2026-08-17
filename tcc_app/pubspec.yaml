@@ -2,7 +2,7 @@ name: tcc_app
 description: Aplicativo do TCC integrado ao sistema em PHP/MySQL.
 publish_to: 'none'
 
-version: 1.0.3+4
+version: 1.0.4+5
 
 environment:
   sdk: '>=3.7.0 <4.0.0'
