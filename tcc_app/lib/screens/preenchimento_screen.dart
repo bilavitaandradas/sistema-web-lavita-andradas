@@ -126,7 +126,7 @@ class _PreenchimentoScreenState extends State<PreenchimentoScreen> {
   bool _campoDeveSerExibido(Map<String, dynamic> campo) {
     final int idCampoFilho = campo['id_campo'] as int;
 
-    // Busca todas as regras referentes a este campo filho.
+    // Busca todas as dependências referentes a este campo filho.
     final dependenciasDoCampo =
         _dependencias
             .where(
@@ -134,61 +134,34 @@ class _PreenchimentoScreenState extends State<PreenchimentoScreen> {
             )
             .toList();
 
-    // Campo sem dependência sempre aparece.
+    // Campo sem dependências sempre aparece.
     if (dependenciasDoCampo.isEmpty) {
       return true;
     }
 
-    // Agrupa as regras pelo campo pai.
+    // Todas as dependências são tratadas como OR.
     //
-    // Exemplo:
-    //
-    // Pai 10:
-    // - Lopes 7
-    // - Lopes 8
-    //
-    // Pai 15:
-    // - Colheita
-    // - Plantio
-    final Map<int, List<String>> regrasPorPai = {};
-
+    // Ou seja:
+    // se QUALQUER combinação Campo Pai + Valor
+    // estiver satisfeita, o campo filho deve aparecer.
     for (final dependencia in dependenciasDoCampo) {
       final int idCampoPai = dependencia['id_campo_pai'] as int;
 
       final String valorPermitido = dependencia['valor'].toString().trim();
 
-      regrasPorPai.putIfAbsent(idCampoPai, () => []);
-
-      regrasPorPai[idCampoPai]!.add(valorPermitido);
-    }
-
-    // Cada campo pai precisa satisfazer sua regra.
-    // Portanto, entre pais diferentes usamos AND.
-    for (final regra in regrasPorPai.entries) {
-      final int idCampoPai = regra.key;
-
-      final List<String> valoresPermitidos = regra.value;
-
       final List<String> valoresAtuais = _obterValoresAtuaisDoCampo(idCampoPai);
 
-      // Pai ainda não preenchido.
-      if (valoresAtuais.isEmpty) {
-        return false;
-      }
-
-      // Dentro do mesmo pai usamos OR:
-      // basta um dos valores atuais estar entre os permitidos.
-      final bool regraDoPaiAtendida = valoresAtuais.any(
-        (valorAtual) => valoresPermitidos.contains(valorAtual),
+      final bool dependenciaAtendida = valoresAtuais.any(
+        (valorAtual) => valorAtual == valorPermitido,
       );
 
-      if (!regraDoPaiAtendida) {
-        return false;
+      if (dependenciaAtendida) {
+        return true;
       }
     }
 
-    // Todos os pais atenderam suas respectivas regras.
-    return true;
+    // Nenhuma das dependências foi satisfeita.
+    return false;
   }
 
   void _limparValorDoCampo(int idCampo, String tipoCampo) {
