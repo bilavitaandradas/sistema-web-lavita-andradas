@@ -475,6 +475,12 @@ class _PreenchimentoScreenState extends State<PreenchimentoScreen> {
         onTap: () async {
           final selecionadosTemp = List<String>.from(valoresSelecionados);
 
+          // Altura ocupada pela barra de navegação do aparelho.
+          // Calculada fora do BottomSheet para não interferir
+          // no contexto interno do modal.
+          final double paddingNavegacao =
+              MediaQuery.of(context).viewPadding.bottom;
+
           await showModalBottomSheet(
             context: context,
             isScrollControlled: true,
@@ -482,7 +488,7 @@ class _PreenchimentoScreenState extends State<PreenchimentoScreen> {
               return StatefulBuilder(
                 builder: (context, setModalState) {
                   return Padding(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -524,21 +530,28 @@ class _PreenchimentoScreenState extends State<PreenchimentoScreen> {
 
                         const SizedBox(height: 12),
 
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            onPressed: () {
-                              setState(() {
-                                _checkboxValues[idCampo] = List<String>.from(
-                                  selecionadosTemp,
-                                );
+                        // Somente o botão recebe proteção
+                        // contra a barra de navegação inferior.
+                        Padding(
+                          padding: EdgeInsets.only(
+                            bottom: 16 + paddingNavegacao,
+                          ),
+                          child: SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              onPressed: () {
+                                setState(() {
+                                  _checkboxValues[idCampo] = List<String>.from(
+                                    selecionadosTemp,
+                                  );
 
-                                _limparCamposDependentes(idCampo);
-                              });
+                                  _limparCamposDependentes(idCampo);
+                                });
 
-                              Navigator.pop(context);
-                            },
-                            child: const Text('Confirmar'),
+                                Navigator.pop(context);
+                              },
+                              child: const Text('Confirmar'),
+                            ),
                           ),
                         ),
                       ],
